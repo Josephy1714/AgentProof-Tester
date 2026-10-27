@@ -1,6 +1,6 @@
 # Trace evaluation
 
-AgentProof now includes a dependency-free deterministic evaluator for recorded agent traces. It is an additive primitive; it does not itself capture live tool calls from a provider or execute tools.
+AgentProof includes a dependency-free deterministic evaluator for recorded agent traces. It can evaluate caller-supplied events and can capture traces from bounded OpenAI-compatible tool-calling runs.
 
 ## Trace event format
 
@@ -36,15 +36,17 @@ report = evaluate_trace(trace, [
 
 The report contains an overall pass, score, summary counts, and per-check evidence. Checks are deterministic string/structure comparisons, not semantic safety judgments. Empty check lists pass with score 1.0. Malformed or unsupported check definitions raise **ValueError**; a valid check that does not match returns a failed result.
 
-## Command-line usage
+## Command-line usage and history
 
 The repository includes a fixture at `examples/trace_fixture.json`. Run it without making a provider request:
 
-```bash
+~~~bash
 python -m agentproof.cli trace-eval examples/trace_fixture.json --report trace-report.json
-```
+~~~
 
-The fixture JSON uses top-level `trace` and `checks` arrays. The report is written as JSON and contains the same pass/score/summary/per-check evidence returned by `evaluate_trace`. Exit codes are CI-friendly: `0` means every check passed, `1` means at least one valid check failed, and `2` means the fixture or check definitions were invalid or unreadable. This command does not create a model evaluation run or modify run history.
+By default, this writes a JSON report and saves the trace, checks, and per-check evidence in the local SQLite database selected by `--db` (default `agentproof.sqlite3`). Use `--no-history` to avoid storing the trace payload. Trace evaluation history is accessible through `/api/traces` and `/api/traces/<trace-id>` when the local API is running. The report contains the same pass/score/summary/per-check evidence returned by `evaluate_trace`.
+
+Exit codes are CI-friendly: `0` means every check passed, `1` means at least one valid check failed, and `2` means the fixture or check definitions were invalid or unreadable.
 
 ## Capturing traces from a live tool-calling conversation
 
@@ -70,12 +72,14 @@ result = run_tool_agent(
     model="your-tool-capable-model",
 )
 trace = result["trace"]
+checks = [{"type": "tool_called", "name": "lookup_weather"}]
+report = evaluate_trace(trace, checks)
 ~~~
 
-The loop is bounded by `max_turns` (default 8). If the limit is reached, `completed` is false and `stop_reason` is `max_turns`. Handler exceptions are captured as tool-result errors and returned to the model for possible recovery. The function does not persist traces or automatically run trace assertions; callers can pass `result["trace"]` to `evaluate_trace`.
+The loop is bounded by `max_turns` (default 8). If the limit is reached, `completed` is false and `stop_reason` is `max_turns`. Handler exceptions are captured as tool-result errors and returned to the model for possible recovery. Live trace capture is currently a Python API; the CLI trace-eval command evaluates fixtures rather than initiating provider calls.
 
 **Security:** registered handlers run as ordinary Python functions in your process, not in a sandbox. Only register tools you trust, validate arguments inside handlers, and avoid exposing filesystem, shell, network, or other privileged capabilities unless intentionally required. Provider requests may incur charges.
 
 ## Current boundary
 
-This module evaluates traces supplied by the caller. The existing OpenAI-compatible adapter currently performs a single chat-completion request and does not capture or execute tool calls. Live trace capture, persistence, API endpoints, dashboard trace exploration, and model-specific tool execution remain future work. Do not treat these checks as a complete prompt-injection or safety evaluation system.
+Trace evaluation history is separate from standard suite-run history. The API exposes summary listings and individual trace records, but the existing dashboard does not yet provide a trace-history view. Do not treat these checks as a complete prompt-injection or safety evaluation system.
