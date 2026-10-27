@@ -4,11 +4,12 @@ from __future__ import annotations
 import json
 import os
 from typing import Any
+from agentproof.adapters.base import AgentAdapter
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 
-class OpenAICompatibleAdapter:
+class OpenAICompatibleAdapter(AgentAdapter):
     """Call an OpenAI-compatible `/chat/completions` endpoint.
 
     The API key is read from an environment variable and is never included in
