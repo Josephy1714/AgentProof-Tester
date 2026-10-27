@@ -13,6 +13,7 @@ from agentproof.adapters import AgentAdapter, OpenAICompatibleAdapter, Simulated
 from agentproof.models import AssertionSpec, EvaluationSuite, TestCase
 from agentproof.runner import run_suite, write_json_report
 from agentproof.storage import SQLiteRunRepository
+from agentproof.trace_storage import SQLiteTraceRepository
 from agentproof.traces import evaluate_trace
 
 
@@ -61,6 +62,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument("--report", default="agentproof-report.json")
     p.add_argument("--db", default="agentproof.sqlite3")
+    p.add_argument(
+        "--no-history",
+        action="store_true",
+        help="Do not persist trace-eval inputs and evidence in the local SQLite history",
+    )
     p.add_argument("--limit", type=int, default=20)
     p.add_argument("--adapter", choices=["simulated", "openai-compatible"], default="simulated")
     p.add_argument("--model", default=os.environ.get("AGENTPROOF_MODEL"))
@@ -80,7 +86,10 @@ def main(argv: list[str] | None = None) -> int:
             Path(args.report).write_text(
                 json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
             )
-        except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
+            trace_id = None
+            if not args.no_history:
+                trace_id = SQLiteTraceRepository(args.db).save_evaluation(events, checks, report)
+        except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError, RuntimeError) as exc:
             print(f"AgentProof error: {exc}", file=sys.stderr)
             return 2
         print(
@@ -88,6 +97,7 @@ def main(argv: list[str] | None = None) -> int:
             f"Score: {report['score']:.1%}\n"
             f"Checks: {report['summary']}\n"
             f"Report: {args.report}"
+            + (f"\nTrace history ID: {trace_id}\nHistory: {args.db}" if trace_id else "")
         )
         return 0 if report["passed"] else 1
 
