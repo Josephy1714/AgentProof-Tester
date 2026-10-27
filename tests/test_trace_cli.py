@@ -73,6 +73,7 @@ def test_trace_eval_persists_history_and_trace_show_returns_evidence(tmp_path: P
     )
 
     assert main(["trace-eval", str(fixture), "--db", str(db)]) == 0
+    capsys.readouterr()
     output = main(["trace-runs", "--db", str(db)])
     assert output == 0
     history_text = capsys.readouterr().out
