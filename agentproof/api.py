@@ -10,6 +10,7 @@ from urllib.parse import parse_qs, urlparse
 from agentproof.analytics import group_by, overview, trends
 from agentproof.regression import compare_runs
 from agentproof.storage import SQLiteRunRepository
+from agentproof.trace_storage import SQLiteTraceRunRepository
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -38,6 +39,29 @@ class Handler(BaseHTTPRequestHandler):
                 return
             if path == "/api/analytics/suites":
                 self._send({"data": group_by(repo, "suite_name")})
+                return
+            if path == "/api/trace-runs":
+                trace_repo = SQLiteTraceRunRepository(
+                    os.environ.get("AGENTPROOF_DB", "agentproof.sqlite3")
+                )
+                self._send(
+                    {
+                        "data": trace_repo.list_runs(
+                            int(q.get("limit", [50])[0]),
+                            int(q.get("offset", [0])[0]),
+                        )
+                    }
+                )
+                return
+            if path.startswith("/api/trace-runs/"):
+                trace_run_id = path.removeprefix("/api/trace-runs/")
+                trace_run = SQLiteTraceRunRepository(
+                    os.environ.get("AGENTPROOF_DB", "agentproof.sqlite3")
+                ).get_run(trace_run_id)
+                if not trace_run:
+                    self._send({"error": "Trace run not found"}, 404)
+                    return
+                self._send(trace_run)
                 return
             if path == "/api/runs":
                 self._send({
