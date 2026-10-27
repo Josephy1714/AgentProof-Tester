@@ -44,13 +44,13 @@ Run the included fixture without making a provider request:
 python -m agentproof.cli trace-eval examples/trace_fixture.json --report trace-report.json
 ```
 
-By default, this writes a JSON report and saves the input trace, checks, and per-check evidence in the local SQLite database selected by `--db` (default `agentproof.sqlite3`). Use `--no-history` to avoid storing trace payloads. The command prints the generated trace history ID when persistence is enabled.
+By default, this writes a JSON report and saves the input trace, check definitions, summary and per-check evidence in the local SQLite database selected by `--db` (default `agentproof.sqlite3`). Use `--no-history` to avoid storing trace payloads. When persistence is enabled, the command prints the generated trace history ID.
 
 Exit codes are CI-friendly: `0` means every check passed, `1` means at least one valid check failed, and `2` means the fixture, check definitions, or runtime operation was invalid or failed.
 
 Trace history is separate from standard suite-run history. The local API exposes:
 
-- `GET /api/traces?limit=20&offset=0` — recent summary records, without full trace payloads.
+- `GET /api/traces?limit=20&offset=0` — recent summary records without full trace payloads.
 - `GET /api/traces/<trace-id>` — full trace, check definitions, and per-check evidence.
 
 The listing limit is bounded by the repository implementation. These endpoints use the same local SQLite database path configured by `AGENTPROOF_DB`. The API is currently a local development API without authentication; do not expose it to untrusted networks.
