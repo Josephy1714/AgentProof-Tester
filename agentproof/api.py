@@ -1,4 +1,4 @@
-"""Tiny stdlib HTTP API for the local dashboard and future hosted adapters."""
+"""Tiny stdlib HTTP API for the local dashboard and hosted Vercel deployment."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import hmac
 import json
 import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from agentproof.analytics import group_by, overview, trends
@@ -24,6 +25,19 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _send_dashboard(self) -> None:
+        dashboard = Path(__file__).resolve().parent.parent / "apps" / "web" / "index.html"
+        try:
+            body = dashboard.read_bytes()
+        except OSError:
+            self._send({"error": "Dashboard asset is missing from this deployment."}, 500)
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def do_GET(self) -> None:
         expected_token = os.environ.get("AGENTPROOF_API_TOKEN")
         if expected_token:
@@ -36,6 +50,11 @@ class Handler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         path = parsed.path.rstrip("/") or "/"
         q = parse_qs(parsed.query)
+
+        if path == "/":
+            self._send_dashboard()
+            return
+
         database = os.environ.get("AGENTPROOF_DB", "agentproof.sqlite3")
         repo = SQLiteRunRepository(database)
         try:
