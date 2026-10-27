@@ -17,7 +17,7 @@
 - Regression analysis for new/removed tests, regressions, recoveries, persistent failures, score/pass/error deltas and duration changes.
 - Analytics for overview metrics, trends, model performance and suite performance.
 - Local JSON HTTP API.
-- Dashboard sections: Overview, Evaluations, Test Suites, Regression, Analytics, Models and Settings.
+- Dashboard sections: Overview, Evaluations, Agent Traces, Test Suites, Regression, Analytics, Models and Settings.
 - Responsive charts, run detail inspection, empty states and data-backed KPIs.
 - Deterministic recorded-trace checks for tool presence/absence, call counts, ordered tool sequences, nested arguments, tool results and final-answer text.
 - Bounded OpenAI-compatible function-tool execution with caller-registered handlers and normalized trace capture.
@@ -147,7 +147,7 @@ Endpoints include:
 - `/api/traces`
 - `/api/traces/<trace-id>`
 
-The existing dashboard includes KPI cards, score trends, test-health visualization, recent runs, run-level evidence, regression summaries, model/suite analytics, and responsive empty/error states. Trace history is currently API-only.
+The existing dashboard includes KPI cards, score trends, test-health visualization, recent runs, run-level evidence, regression summaries, model/suite analytics, and responsive empty/error states. Trace history is available in the dashboard's **Agent Traces** section, including pass/fail filtering, scores, timestamps, per-check evidence, and expandable captured event details.
 
 ## Architecture
 
