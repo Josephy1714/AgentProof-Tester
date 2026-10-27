@@ -56,7 +56,7 @@ def load_trace_fixture(path: str) -> tuple[list[dict[str, Any]], list[dict[str, 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="agentproof")
     p.add_argument("command", choices=["run", "runs", "run-show", "trace-eval"])
-    p.add_argument("suite", nargs="?", help="Suite path, run ID, or trace fixture path depending on command")
+    p.add_argument(\n        "suite", nargs="?", help="Suite path, run ID, or trace fixture path depending on command"\n    )
     p.add_argument("--report", default="agentproof-report.json")
     p.add_argument("--db", default="agentproof.sqlite3")
     p.add_argument("--limit", type=int, default=20)
