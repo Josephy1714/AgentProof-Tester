@@ -56,6 +56,16 @@ def load_trace_fixture(path: str) -> tuple[list[dict[str, Any]], list[dict[str, 
     return events, checks
 
 
+def make_run_repository(db_path: str) -> SQLiteRunRepository | SupabaseHostedStorage:
+    """Select local SQLite by default or the explicitly opted-in hosted backend."""
+    storage_mode = os.environ.get("AGENTPROOF_STORAGE", "sqlite").lower()
+    if storage_mode == "sqlite":
+        return SQLiteRunRepository(db_path)
+    if storage_mode == "supabase":
+        return SupabaseHostedStorage()
+    raise ValueError("AGENTPROOF_STORAGE must be 'sqlite' or 'supabase'.")
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="agentproof")
     p.add_argument("command", choices=["run", "runs", "run-show", "trace-eval"])
@@ -112,19 +122,23 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 0 if report["passed"] else 1
 
-    repo = SQLiteRunRepository(args.db)
-    if args.command == "runs":
-        print(json.dumps(repo.list_runs(args.limit), indent=2, default=str))
-        return 0
-    if args.command == "run-show":
-        if not args.suite:
-            p.error("run-show requires a run id")
-        run = repo.get_run(args.suite)
-        if not run:
-            print("Run not found", file=sys.stderr)
-            return 2
-        print(json.dumps(run.to_dict(), indent=2, default=str))
-        return 0
+    try:
+        repo = make_run_repository(args.db)
+        if args.command == "runs":
+            print(json.dumps(repo.list_runs(args.limit), indent=2, default=str))
+            return 0
+        if args.command == "run-show":
+            if not args.suite:
+                p.error("run-show requires a run id")
+            run = repo.get_run(args.suite)
+            if not run:
+                print("Run not found", file=sys.stderr)
+                return 2
+            print(json.dumps(run.to_dict(), indent=2, default=str))
+            return 0
+    except (OSError, ValueError, RuntimeError) as exc:
+        print(f"AgentProof error: {exc}", file=sys.stderr)
+        return 2
     if not args.suite:
         p.error("run requires a suite path")
 
@@ -166,7 +180,8 @@ def main(argv: list[str] | None = None) -> int:
         f"Results: {run.summary}\n"
         f"Simulated: {run.simulated}\n"
         f"Report: {args.report}\n"
-        f"History: {args.db}"
+        f"History: {os.environ.get('AGENTPROOF_STORAGE', 'sqlite').lower()}"
+        + (f" ({args.db})" if os.environ.get("AGENTPROOF_STORAGE", "sqlite").lower() == "sqlite" else "")
     )
     return 1 if any(run.summary.get(k, 0) for k in ("failed", "error", "timeout")) else 0
 
