@@ -22,19 +22,16 @@
 - Per-check evidence and explicit limitations.
 - JSON fixture CLI with CI-friendly exit codes and per-check reports.
 
-## Phase 4B — live trace evaluation (in progress)
-- Bounded OpenAI-compatible tool-calling execution with registered local handlers. (complete)
-- Normalize assistant messages, tool calls and results into trace events. (complete)
-- Evaluate captured traces immediately and fail incomplete turn-limited runs. (complete)
+## Phase 4B — trace integration (next)
+- Capture tool-call traces from a real agent execution adapter.
 - Persist trace events and check results alongside evaluation runs.
 - Expose trace evidence through the API and dashboard.
-- Add end-to-end integration tests for persisted live-trace evaluations.
 
 ## Phase 5 — production platform
 - Hosted Postgres/Supabase persistence.
 - Authentication, organizations and project permissions.
 - Async evaluation jobs and durable workers.
-- Additional provider/agent trace adapters and trajectory evaluation.
+- Provider/agent trace capture, trajectory evaluation and safety suites.
 - Scheduling, notifications, report sharing and production deployment.
 
 AgentProof does not claim Phase 4B or Phase 5 capabilities until they are implemented and tested.
