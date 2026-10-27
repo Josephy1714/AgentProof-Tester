@@ -110,3 +110,42 @@ def test_openrouter_rejects_simulated_input_shape(
         status, payload = post_json(base_url + "/api/runs", suite)
     assert status == 400
     assert "input.prompt or input.messages" in payload["error"]
+
+
+def test_openrouter_accepts_only_fixed_free_models(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("AGENTPROOF_DB", str(tmp_path / "agentproof.sqlite3"))
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key-never-used-for-network")
+
+    class FakeOpenRouterAdapter:
+        name = "openai-compatible"
+        is_simulated = False
+
+        def __init__(self, **kwargs: Any) -> None:
+            assert kwargs["model"] == "nvidia/nemotron-3-ultra-550b-a55b:free"
+
+        def invoke(self, payload: Any) -> dict[str, str]:
+            return {"content": "96", "model": "nvidia/nemotron-3-ultra-550b-a55b:free"}
+
+    monkeypatch.setattr(api, "OpenAICompatibleAdapter", FakeOpenRouterAdapter)
+    suite = live_suite()
+    suite["model"] = "nvidia/nemotron-3-ultra-550b-a55b:free"
+    with running_api() as base_url:
+        status, run = post_json(base_url + "/api/runs", suite)
+        with urlopen(base_url + "/api/runs?limit=10", timeout=3) as response:
+            history = json.loads(response.read())
+    assert status == 201
+    assert history["data"][0]["model"] == suite["model"]
+    assert run["summary"]["passed"] == 1
+
+
+def test_openrouter_rejects_arbitrary_model_name(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("AGENTPROOF_DB", str(tmp_path / "agentproof.sqlite3"))
+    monkeypatch.setenv("OPENROUTER_API_KEY", "test-key")
+    suite = live_suite()
+    suite["model"] = "some-provider/paid-model"
+    with running_api() as base_url:
+        status, payload = post_json(base_url + "/api/runs", suite)
+    assert status == 400
+    assert "Unsupported live model" in payload["error"]
