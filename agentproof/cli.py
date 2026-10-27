@@ -76,16 +76,16 @@ def main(argv: list[str] | None = None) -> int:
             trace, checks = load_trace_case(args.suite)
             report = evaluate_trace(trace, checks)
             Path(args.report).write_text(
-                json.dumps(report, indent=2, ensure_ascii=False, allow_nan=False) + "\\n",
+                json.dumps(report, indent=2, ensure_ascii=False, allow_nan=False) + "\n",
                 encoding="utf-8",
             )
         except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
             print(f"AgentProof error: {exc}", file=sys.stderr)
             return 2
         print(
-            f"Trace evaluation: {'PASS' if report['passed'] else 'FAIL'}\\n"
-            f"Score: {report['score']:.1%}\\n"
-            f"Results: {report['summary']}\\n"
+            f"Trace evaluation: {'PASS' if report['passed'] else 'FAIL'}\n"
+            f"Score: {report['score']:.1%}\n"
+            f"Results: {report['summary']}\n"
             f"Report: {args.report}"
         )
         return 0 if report["passed"] else 1
@@ -141,11 +141,11 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     print(
-        f"Run: {run.run_id}\\n"
-        f"Score: {run.score:.1%}\\n"
-        f"Results: {run.summary}\\n"
-        f"Simulated: {run.simulated}\\n"
-        f"Report: {args.report}\\n"
+        f"Run: {run.run_id}\n"
+        f"Score: {run.score:.1%}\n"
+        f"Results: {run.summary}\n"
+        f"Simulated: {run.simulated}\n"
+        f"Report: {args.report}\n"
         f"History: {args.db}"
     )
     return 1 if any(run.summary.get(k, 0) for k in ("failed", "error", "timeout")) else 0
