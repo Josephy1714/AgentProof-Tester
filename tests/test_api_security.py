@@ -65,3 +65,54 @@ def test_api_rejects_missing_and_invalid_bearer_tokens(
     assert invalid_payload == {"error": "Unauthorized"}
     assert valid_status == 200
     assert valid_payload["name"] == "AgentProof API"
+
+
+
+def test_api_refuses_non_loopback_bind_without_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("AGENTPROOF_API_TOKEN", raising=False)
+    from agentproof.api import serve
+
+    with pytest.raises(RuntimeError, match="non-loopback host"):
+        serve(host="0.0.0.0", port=8000)
+
+
+def test_api_allows_loopback_bind_without_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("AGENTPROOF_API_TOKEN", raising=False)
+    from agentproof import api
+
+    called: list[tuple[str, int]] = []
+
+    class FakeServer:
+        def __init__(self, address: tuple[str, int], handler: type) -> None:
+            called.append(address)
+
+        def serve_forever(self) -> None:
+            return
+
+    monkeypatch.setattr(api, "ThreadingHTTPServer", FakeServer)
+    api.serve(host="127.0.0.1", port=8000)
+    assert called == [("127.0.0.1", 8000)]
+
+
+def test_api_allows_non_loopback_bind_with_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("AGENTPROOF_API_TOKEN", "test-secret-token")
+    from agentproof import api
+
+    called: list[tuple[str, int]] = []
+
+    class FakeServer:
+        def __init__(self, address: tuple[str, int], handler: type) -> None:
+            called.append(address)
+
+        def serve_forever(self) -> None:
+            return
+
+    monkeypatch.setattr(api, "ThreadingHTTPServer", FakeServer)
+    api.serve(host="0.0.0.0", port=8000)
+    assert called == [("0.0.0.0", 8000)]
