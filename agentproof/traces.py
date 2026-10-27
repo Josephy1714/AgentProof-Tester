@@ -61,7 +61,7 @@ def evaluate_trace(
 
     for index, check in enumerate(checks):
         check_type = check.get("type")
-        if check_type not in SUPPORTED_TRACE_CHECKS:
+        if not isinstance(check_type, str) or check_type not in SUPPORTED_TRACE_CHECKS:
             raise ValueError(f"Unsupported trace check at index {index}: {check_type!r}")
 
         name = check.get("name")
