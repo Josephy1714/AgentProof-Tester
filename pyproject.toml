@@ -33,3 +33,6 @@ ignore = ["E701", "E702"]
 python_version = "3.12"
 strict = true
 packages = ["agentproof"]
+
+[tool.vercel]
+entrypoint = "agentproof.api:Handler"
