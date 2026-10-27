@@ -91,14 +91,20 @@ class OpenAICompatibleAdapter(AgentAdapter):
             raise RuntimeError("Provider response content must be a string")
 
         # Preserve structured model output when the assistant returns valid JSON.
+        # Only treat JSON objects/arrays as structured model output. Plain-text
+        # answers such as "96" are valid JSON scalars too, but must remain
+        # available as the text content for assertions against the "content" path.
         try:
-            return json.loads(content)
+            parsed_content = json.loads(content)
+            if isinstance(parsed_content, (dict, list)):
+                return parsed_content
         except json.JSONDecodeError:
-            return {
-                "content": content,
-                "model": result.get("model", self.model),
-                "usage": result.get("usage", {}),
-            }
+            pass
+        return {
+            "content": content,
+            "model": result.get("model", self.model),
+            "usage": result.get("usage", {}),
+        }
 
     @staticmethod
     def _messages(payload: Any) -> list[dict[str, str]]:
