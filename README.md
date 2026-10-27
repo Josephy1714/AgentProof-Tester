@@ -32,6 +32,7 @@ source .venv/bin/activate
 pip install -e . -r requirements-dev.txt
 pytest
 python -m agentproof.cli run examples/basic_suite.json
+python -m agentproof.cli trace-eval examples/trace_fixture.json --report trace-report.json
 python -m agentproof.api
 ```
 
@@ -79,7 +80,7 @@ report = evaluate_trace(trace, [
 ])
 ```
 
-See [Trace evaluation](docs/traces.md) for the event schema and supported checks. The example fixture at `examples/trace_fixture.json` is illustrative and is not run by the standard suite runner.
+See [Trace evaluation](docs/traces.md) for the event schema and supported checks. The example fixture at `examples/trace_fixture.json` can be run with `python -m agentproof.cli trace-eval examples/trace_fixture.json --report trace-report.json`. The command writes per-check evidence to JSON, exits `0` on pass, `1` on failed checks, and `2` on malformed input; it does not call a model or write to SQLite run history.
 
 ## Live provider evaluation
 
