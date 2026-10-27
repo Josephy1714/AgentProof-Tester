@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hmac
 import json
 import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -23,6 +24,14 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self) -> None:
+        expected_token = os.environ.get("AGENTPROOF_API_TOKEN")
+        if expected_token:
+            authorization = self.headers.get("Authorization", "")
+            scheme, _, supplied_token = authorization.partition(" ")
+            if scheme.lower() != "bearer" or not supplied_token or not hmac.compare_digest(supplied_token, expected_token):
+                self._send({"error": "Unauthorized"}, 401)
+                return
+
         parsed = urlparse(self.path)
         path = parsed.path.rstrip("/") or "/"
         q = parse_qs(parsed.query)
@@ -99,6 +108,12 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def serve(host: str = "127.0.0.1", port: int = 8000) -> None:
+    """Run the API; non-loopback binds require explicit bearer-token protection."""
+    if host not in {"127.0.0.1", "::1", "localhost"} and not os.environ.get("AGENTPROOF_API_TOKEN"):
+        raise RuntimeError(
+            "Refusing to bind the AgentProof API to a non-loopback host without "
+            "AGENTPROOF_API_TOKEN. Set a long random token or bind to 127.0.0.1."
+        )
     ThreadingHTTPServer((host, port), Handler).serve_forever()
 
 
