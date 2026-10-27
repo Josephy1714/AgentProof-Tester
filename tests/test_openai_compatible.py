@@ -59,3 +59,11 @@ def test_missing_api_key_fails_before_network() -> None:
 def test_invalid_base_url_is_rejected() -> None:
     with pytest.raises(ValueError, match="base_url"):
         OpenAICompatibleAdapter("test-model", api_key="secret", base_url="file:///tmp")
+
+
+
+def test_numeric_plain_text_content_keeps_content_path() -> None:
+    response = {"model": "served-model", "usage": {"total_tokens": 3}, "choices": [{"message": {"content": "96"}}]}
+    with patch("agentproof.adapters.openai_compatible.urlopen", return_value=FakeResponse(response)):
+        result = adapter().invoke({"prompt": "What is 12 times 8?"})
+    assert result == {"content": "96", "model": "served-model", "usage": {"total_tokens": 3}}
