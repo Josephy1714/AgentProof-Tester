@@ -2,7 +2,7 @@
 
 **An evaluation and regression-testing platform foundation for AI agents.** AgentProof helps developers run reproducible suites, inspect evidence, compare versions, and track quality over time.
 
-> **Current status:** evaluation engine + deterministic simulated adapter + opt-in OpenAI-compatible adapter + SQLite run history + regression analytics + local dashboard API + data-backed dashboard + deterministic recorded-trace checks. Hosted auth, cloud persistence, live trace capture and distributed jobs are future work.
+> **Current status:** evaluation engine + simulated and OpenAI-compatible adapters + SQLite evaluation history + regression analytics + local dashboard API + data-backed dashboard + deterministic trace checks + bounded live tool execution + persistent trace-evaluation history. Trace history is available through the CLI and local API; dashboard trace exploration, hosted auth, cloud persistence and distributed jobs remain future work.
 
 ## Implemented
 
@@ -21,6 +21,8 @@
 - Responsive charts, run detail inspection, empty states and data-backed KPIs.
 - Deterministic recorded-trace checks for tool presence/absence, call counts, ordered tool sequences, nested arguments, tool results and final-answer text.
 - Bounded OpenAI-compatible function-tool execution with caller-registered handlers and normalized trace capture.
+- Persistent trace-evaluation history in SQLite, including the original events, checks and per-check evidence.
+- CLI and local API access to trace evaluation history.
 - Tests and CI with Ruff, mypy and pytest.
 
 ## Quick start
@@ -84,9 +86,11 @@ See [Trace evaluation](docs/traces.md) for the event schema and supported checks
 
 ```bash
 python -m agentproof.cli trace-eval examples/trace_fixture.json --report trace-report.json
+python -m agentproof.cli trace-runs
+python -m agentproof.cli trace-show <trace-run-id>
 ```
 
-The command exits with code 0 when all checks pass, 1 when valid checks fail, and 2 for invalid input or runtime errors. It writes per-check evidence to the report. It does not call a model, execute tools, or create a run-history database entry.
+The command exits with code 0 when all checks pass, 1 when valid checks fail, and 2 for invalid input or runtime errors. It writes per-check evidence to the report and saves the trace, checks and report to the SQLite database. It does not call a model or execute tools.
 
 ## Live provider evaluation
 
@@ -111,6 +115,8 @@ Endpoints include:
 - `/api/runs`
 - `/api/runs/<id>`
 - `/api/runs/<id>/regression`
+- `/api/trace-runs`
+- `/api/trace-runs/<trace-run-id>`
 - `/api/analytics/trends`
 - `/api/analytics/models`
 - `/api/analytics/suites`
@@ -129,7 +135,7 @@ Adapters -> Evaluation Runner -> EvaluationRun -> RunRepository -> SQLite
                                                  |
                                             Web Dashboard
 
-Recorded trace -> Trace checks -> Per-check evidence
+Recorded/live captured trace -> Trace checks -> Per-check evidence -> SQLite trace history -> Trace history API
 ```
 
 The storage boundary is intentionally replaceable so a future Postgres/Supabase implementation can be introduced without coupling evaluation logic to a database vendor.
@@ -148,7 +154,7 @@ Keep provider keys in environment variables. Evaluation inputs, traces and outpu
 
 ## Roadmap
 
-See `docs/roadmap.md`. Next priorities are live trace capture and persistence, then hosted persistence, authentication, async jobs, scheduling and production deployment.
+See `docs/roadmap.md`. Next priorities are dashboard trace-history exploration and richer run comparisons, then hosted persistence, authentication, async jobs, scheduling and production deployment.
 
 ## License
 
