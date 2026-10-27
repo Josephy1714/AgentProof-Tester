@@ -1,0 +1,9 @@
+{
+  "name": "support-agent-smoke-test",
+  "version": "1.0.0",
+  "schema_version": "1.0",
+  "tests": [
+    {"id":"returns-structured-response","category":"formatting","input":{"simulated_output":{"answer":"Hello","status":"ok"}},"assertions":[{"type":"has_key","expected":"answer"},{"type":"equals","path":"status","expected":"ok"},{"type":"is_type","path":"answer","expected":"string"}]},
+    {"id":"contains-answer","category":"content","input":{"simulated_output":{"answer":"refund policy"}},"assertions":[{"type":"contains","path":"answer","value":"refund"}]}
+  ]
+}
