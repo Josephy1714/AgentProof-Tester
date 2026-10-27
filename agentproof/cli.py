@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from agentproof.adapters import OpenAICompatibleAdapter, SimulatedAdapter
+from agentproof.adapters import AgentAdapter, OpenAICompatibleAdapter, SimulatedAdapter
 from agentproof.models import AssertionSpec, EvaluationSuite, TestCase
 from agentproof.runner import run_suite, write_json_report
 from agentproof.validation import SuiteValidationError
@@ -65,7 +65,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         suite = load_suite(args.suite)
         if args.adapter == "simulated":
-            adapter = SimulatedAdapter()
+            adapter: AgentAdapter = SimulatedAdapter()
             adapter_config: dict[str, Any] = {"mode": "simulated"}
         else:
             if not args.model:
