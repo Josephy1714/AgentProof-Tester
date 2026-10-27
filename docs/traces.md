@@ -44,7 +44,16 @@ The repository includes a fixture at `examples/trace_fixture.json`. Run it witho
 python -m agentproof.cli trace-eval examples/trace_fixture.json --report trace-report.json
 ```
 
-The fixture JSON uses top-level `trace` and `checks` arrays. The report is written as JSON and contains the same pass/score/summary/per-check evidence returned by `evaluate_trace`. Exit codes are CI-friendly: `0` means every check passed, `1` means at least one valid check failed, and `2` means the fixture or check definitions were invalid or unreadable. This command does not create a model evaluation run or modify run history.
+The fixture JSON uses top-level `trace` and `checks` arrays. The report is written as JSON and contains the same pass/score/summary/per-check evidence returned by `evaluate_trace`. Each evaluation is also persisted to the SQLite database selected by `--db` (default `agentproof.sqlite3`), including the trace events, checks and report. Exit codes are CI-friendly: `0` means every check passed, `1` means at least one valid check failed, and `2` means the fixture or check definitions were invalid or unreadable. This command does not call a model or execute tools.
+
+Inspect trace history with:
+
+~~~bash
+python -m agentproof.cli trace-runs --db agentproof.sqlite3
+python -m agentproof.cli trace-show <trace-run-id> --db agentproof.sqlite3
+~~~
+
+The list command omits the full event payload to stay compact; `trace-show` returns the saved trace, checks and per-check evidence.
 
 ## Capturing traces from a live tool-calling conversation
 
@@ -72,10 +81,10 @@ result = run_tool_agent(
 trace = result["trace"]
 ~~~
 
-The loop is bounded by `max_turns` (default 8). If the limit is reached, `completed` is false and `stop_reason` is `max_turns`. Handler exceptions are captured as tool-result errors and returned to the model for possible recovery. The function does not persist traces or automatically run trace assertions; callers can pass `result["trace"]` to `evaluate_trace`.
+The loop is bounded by `max_turns` (default 8). If the limit is reached, `completed` is false and `stop_reason` is `max_turns`. Handler exceptions are captured as tool-result errors and returned to the model for possible recovery. The function does not automatically run trace assertions. Callers can pass `result["trace"]` to `evaluate_trace`; the resulting report can then be persisted through `SQLiteTraceRunRepository` or saved using a fixture with the `trace-eval` command.
 
 **Security:** registered handlers run as ordinary Python functions in your process, not in a sandbox. Only register tools you trust, validate arguments inside handlers, and avoid exposing filesystem, shell, network, or other privileged capabilities unless intentionally required. Provider requests may incur charges.
 
 ## Current boundary
 
-This module evaluates traces supplied by the caller. The existing OpenAI-compatible adapter currently performs a single chat-completion request and does not capture or execute tool calls. Live trace capture, persistence, API endpoints, dashboard trace exploration, and model-specific tool execution remain future work. Do not treat these checks as a complete prompt-injection or safety evaluation system.
+The trace evaluator evaluates events supplied by the caller; `run_tool_agent` separately captures bounded tool-calling traces when explicitly invoked. Trace evaluation results are persisted by the CLI and exposed through `/api/trace-runs` and `/api/trace-runs/<trace-run-id>`. Dashboard trace exploration and richer comparisons remain future work. Do not treat these checks as a complete prompt-injection or safety evaluation system.
