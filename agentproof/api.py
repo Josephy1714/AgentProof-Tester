@@ -257,7 +257,7 @@ class Handler(BaseHTTPRequestHandler):
                 )
                 run = run_suite(
                     suite, adapter,
-                    {"provider": "openrouter", "model": "openrouter/free", "mode": "live"},
+                    {"provider": "openrouter", "model": requested_model, "mode": "live"},
                 )
                 model = requested_model
             else:
