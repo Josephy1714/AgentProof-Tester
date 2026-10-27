@@ -1,21 +1,38 @@
 # AgentProof
 
-**An evaluation and regression-testing foundation for AI agents.** AgentProof helps developers test agent behavior, compare versions, and understand failures using reproducible suites and explicit evidence.
+**An evaluation and regression-testing platform foundation for AI agents.** AgentProof helps developers run reproducible suites, inspect evidence, compare versions, and track quality over time.
 
-> **Current status:** early foundation. A deterministic simulated adapter and an opt-in OpenAI-compatible Chat Completions adapter are implemented. The dashboard is still a static UI preview; there is no hosted evaluation API or production dashboard yet.
+> **Current status:** evaluation engine + deterministic simulated adapter + opt-in OpenAI-compatible adapter + SQLite run history + regression analytics + local dashboard API + data-backed dashboard. Hosted auth, cloud persistence, traces and distributed jobs are future work.
 
 ## Implemented
 
-- Typed suite, assertion, run, and result models.
-- Suite validation for duplicate IDs, unsupported schema/assertion types, missing assertions, invalid timeouts/weights, and malformed regular expressions.
-- Deterministic assertions: equality, containment, type, numeric tolerance, regex, and object-key presence.
-- Per-test exception and timeout reporting so later tests continue.
-- Canonical SHA-256 configuration fingerprints and separate execution IDs.
-- Regression comparisons for new/removed tests, pass-to-fail regressions, recoveries, status changes, and score deltas.
-- JSON suite input, JSON report output, CLI, tests, and CI checks.
-- Optional live adapter for OpenAI-compatible `/chat/completions` APIs, implemented with Python's standard library and no additional runtime dependencies.
+- Typed suites, assertions, test results and evaluation runs.
+- Validation for malformed suites, unsupported assertions, duplicate IDs, timeouts, weights and regex patterns.
+- Deterministic equality, containment, type, numeric tolerance, regex and object-key assertions.
+- Per-test exception and timeout isolation.
+- Configuration fingerprints and execution IDs.
+- OpenAI-compatible Chat Completions adapter with environment-only API keys.
+- SQLite persistence behind a `RunRepository` abstraction.
+- Persisted test-level model outputs and assertion evidence.
+- Regression analysis for new/removed tests, regressions, recoveries, persistent failures, score/pass/error deltas and duration changes.
+- Analytics for overview metrics, trends, model performance and suite performance.
+- Local JSON HTTP API.
+- Real dashboard sections: Overview, Evaluations, Test Suites, Regression, Analytics, Models and Settings.
+- Responsive charts, run detail inspection, empty states and data-backed KPIs.
+- Tests and CI with Ruff, mypy and pytest.
 
-## Quick start (Python 3.12+)
+## Quick start
+
+Python 3.12+:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -e . -r requirements-dev.txt
+pytest
+python -m agentproof.cli run examples/basic_suite.json
+python -m agentproof.api
+```
 
 Windows PowerShell:
 
@@ -24,67 +41,66 @@ py -3.12 -m venv .venv
 .venv\Scripts\Activate.ps1
 python -m pip install -e . -r requirements-dev.txt
 pytest
-python -m agentproof.cli run examples/basic_suite.json --report agentproof-report.json
+python -m agentproof.cli run examples/basic_suite.json
+python -m agentproof.api
 ```
 
-macOS/Linux:
+Open `apps/web/index.html` through the repository's web hosting or local static server while the API is running. The dashboard reads real API data; it does not contain fabricated KPI values.
+
+## Run history
+
+The CLI persists completed evaluations to `agentproof.sqlite3` by default:
 
 ```bash
-python3.12 -m venv .venv
-source .venv/bin/activate
-python -m pip install -e . -r requirements-dev.txt
-pytest
-python -m agentproof.cli run examples/basic_suite.json --report agentproof-report.json
+python -m agentproof.cli runs
+python -m agentproof.cli run-show <run-id>
 ```
 
-The default CLI mode uses `SimulatedAdapter`. Synthetic fixtures are useful for testing AgentProof itself, but are not evidence of real model performance.
+Use `AGENTPROOF_DB` or `--db` to select another local database path. SQLite files are ignored by git.
 
-## Run a live provider evaluation
-
-The live adapter sends requests to an OpenAI-compatible Chat Completions endpoint. **Live requests may incur provider charges.** Keep API keys in environment variables; do not commit keys or put them in suite files.
-
-Windows PowerShell:
-
-```powershell
-$env:OPENAI_API_KEY = "your-key"
-python -m agentproof.cli run examples/live_provider_suite.json --adapter openai-compatible --model "your-model-id" --report live-report.json
-```
-
-macOS/Linux:
+## Live provider evaluation
 
 ```bash
 export OPENAI_API_KEY="your-key"
-python -m agentproof.cli run examples/live_provider_suite.json --adapter openai-compatible --model "your-model-id" --report live-report.json
+python -m agentproof.cli run examples/live_provider_suite.json --adapter openai-compatible --model "your-model-id"
 ```
 
-For a compatible provider or local gateway, supply its API base URL (the base URL should not include `/chat/completions`):
+For another OpenAI-compatible gateway, use `--base-url`. Live requests may incur provider charges. API keys are never written into fingerprints or reports.
+
+## Dashboard and API
+
+Start the local API:
 
 ```bash
-python -m agentproof.cli run examples/live_provider_suite.json --adapter openai-compatible --model "your-model-id" --base-url "https://provider.example/v1"
+python -m agentproof.api
 ```
 
-Configuration options:
-- `--model` or `AGENTPROOF_MODEL`: model identifier required by the provider.
-- `--base-url` or `AGENTPROOF_BASE_URL`: API base URL; defaults to `https://api.openai.com/v1`.
-- `--api-key-env`: environment variable containing the API key; defaults to `OPENAI_API_KEY`.
-- `--request-timeout`: per-request network timeout in seconds; defaults to 30.
+Endpoints include:
 
-Suite inputs can be plain strings, objects with a `prompt` string, or objects with a `messages` list of role/content strings. If the assistant response content is valid JSON, AgentProof parses it into a structured value so assertions can inspect fields. Otherwise, output is returned as an object containing `content`, `model`, and `usage`.
+- `/api/dashboard/overview`
+- `/api/runs`
+- `/api/runs/<id>`
+- `/api/runs/<id>/regression`
+- `/api/analytics/trends`
+- `/api/analytics/models`
+- `/api/analytics/suites`
 
-The API key is not included in the adapter configuration fingerprint or report. Treat reports as potentially sensitive because they can contain test inputs and model outputs.
+The dashboard includes KPI cards, score trends, test-health visualization, recent runs, run-level evidence, regression summaries, model/suite analytics, and responsive empty/error states.
 
-## Project layout
+## Architecture
 
-- `agentproof/models.py`: typed contracts.
-- `agentproof/validation.py`: validation and configuration fingerprinting.
-- `agentproof/assertions.py`: deterministic assertion evaluation.
-- `agentproof/adapters/`: adapter contract, simulated adapter, and OpenAI-compatible adapter.
-- `agentproof/runner.py`: run orchestration and JSON reporting.
-- `agentproof/regression.py`: comparisons between completed runs.
-- `agentproof/cli.py`: local command-line interface.
-- `examples/`: simulated and live-provider suites.
-- `tests/`: engine, regression, and adapter tests.
-- `docs/`: architecture and roadmap.
+```text
+Adapters -> Evaluation Runner -> EvaluationRun -> RunRepository -> SQLite
+                                             |          |
+                                             v          v
+                                         Regression  Analytics
+                                             \          /
+                                              HTTP API
+                                                 |
+                                            Web Dashboard
+```
+
+The storage boundary is intentionally replaceable so a future Postgres/Supabase implementation can be introduced without coupling evaluation logic to a database vendor.
 
 ## Development checks
 
@@ -94,14 +110,14 @@ mypy agentproof
 pytest
 ```
 
-## Limitations and next steps
+## Security
 
-- The live adapter supports OpenAI-compatible Chat Completions only; provider-specific APIs and tool-calling/trajectory capture are not implemented.
-- Provider response formats vary. The live example is a smoke test, not a guarantee of model compliance or a benchmark.
-- Only schema version `1.0` is accepted.
-- Current scoring is the unweighted mean of test scores; category weights are validated but not applied yet.
-- Thread-based timeouts report overruns but cannot forcibly terminate code already running inside a thread. Untrusted execution requires process/container isolation.
-- Persistent run history, a hosted API, authentication, and a dashboard backed by actual run data are not yet implemented.
-- No production deployment is claimed.
+Keep provider keys in environment variables. Evaluation inputs and outputs may contain sensitive information. SQLite and the current local HTTP API are development/portfolio infrastructure, not a production multi-tenant security boundary.
 
-See [architecture](docs/architecture.md) and [roadmap](docs/roadmap.md).
+## Roadmap
+
+See `docs/roadmap.md`. The next major phase is production platform infrastructure: hosted persistence, authentication, async jobs, traces, safety/robustness suites, scheduling and production deployment.
+
+## License
+
+MIT.
