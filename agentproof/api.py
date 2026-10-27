@@ -16,6 +16,16 @@ from agentproof.storage import SQLiteRunRepository
 from agentproof.trace_storage import SQLiteTraceRepository
 
 
+def _database_path() -> str:
+    """Use explicit storage when configured; serverless filesystems are not persistent."""
+    configured = os.environ.get("AGENTPROOF_DB")
+    if configured:
+        return configured
+    if os.environ.get("VERCEL"):
+        return "/tmp/agentproof.sqlite3"
+    return "agentproof.sqlite3"
+
+
 class Handler(BaseHTTPRequestHandler):
     def _send(self, payload: object, status: int = 200) -> None:
         body = json.dumps(payload, default=str).encode()
@@ -55,7 +65,7 @@ class Handler(BaseHTTPRequestHandler):
             self._send_dashboard()
             return
 
-        database = os.environ.get("AGENTPROOF_DB", "agentproof.sqlite3")
+        database = _database_path()
         repo = SQLiteRunRepository(database)
         try:
             if path == "/api/dashboard/overview":
