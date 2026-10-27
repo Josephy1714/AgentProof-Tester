@@ -1,8 +1,12 @@
 """CLI for running JSON suites with the simulated adapter."""
 from __future__ import annotations
-import argparse, json, sys
+
+import argparse
+import json
+import sys
 from pathlib import Path
 from typing import Any
+
 from agentproof.adapters import SimulatedAdapter
 from agentproof.models import AssertionSpec, EvaluationSuite, TestCase
 from agentproof.runner import run_suite, write_json_report
@@ -23,7 +27,8 @@ def main(argv: list[str] | None = None) -> int:
         run = run_suite(load_suite(args.suite), SimulatedAdapter())
         write_json_report(run, args.report)
     except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError, SuiteValidationError) as exc:
-        print(f"AgentProof error: {exc}", file=sys.stderr); return 2
+        print(f"AgentProof error: {exc}", file=sys.stderr)
+        return 2
     print(f"Run: {run.run_id}\nScore: {run.score:.1%}\nResults: {run.summary}\nSimulated: {run.simulated}\nReport: {args.report}")
     return 1 if any(run.summary.get(key, 0) for key in ("failed", "error", "timeout")) else 0
 
