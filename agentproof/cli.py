@@ -6,10 +6,12 @@ import argparse
 import json
 import os
 import sys
+import uuid
 from pathlib import Path
 from typing import Any
 
 from agentproof.adapters import AgentAdapter, OpenAICompatibleAdapter, SimulatedAdapter
+from agentproof.cloud_storage import SupabaseHostedStorage
 from agentproof.models import AssertionSpec, EvaluationSuite, TestCase
 from agentproof.runner import run_suite, write_json_report
 from agentproof.storage import SQLiteRunRepository
@@ -88,7 +90,16 @@ def main(argv: list[str] | None = None) -> int:
             )
             trace_id = None
             if not args.no_history:
-                trace_id = SQLiteTraceRepository(args.db).save_evaluation(events, checks, report)
+                storage_mode = os.environ.get("AGENTPROOF_STORAGE", "sqlite").lower()
+                if storage_mode == "sqlite":
+                    trace_id = SQLiteTraceRepository(args.db).save_evaluation(events, checks, report)
+                elif storage_mode == "supabase":
+                    trace_id = uuid.uuid4().hex
+                    SupabaseHostedStorage().save_trace_evaluation(
+                        events, checks, report, trace_key=trace_id
+                    )
+                else:
+                    raise ValueError("AGENTPROOF_STORAGE must be 'sqlite' or 'supabase'.")
         except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError, RuntimeError) as exc:
             print(f"AgentProof error: {exc}", file=sys.stderr)
             return 2
@@ -97,7 +108,7 @@ def main(argv: list[str] | None = None) -> int:
             f"Score: {report['score']:.1%}\n"
             f"Checks: {report['summary']}\n"
             f"Report: {args.report}"
-            + (f"\nTrace history ID: {trace_id}\nHistory: {args.db}" if trace_id else "")
+            + (f"\nTrace history ID: {trace_id}\nHistory: {os.environ.get('AGENTPROOF_STORAGE', 'sqlite').lower()}" if trace_id else "")
         )
         return 0 if report["passed"] else 1
 
