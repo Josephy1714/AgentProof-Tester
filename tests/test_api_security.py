@@ -42,9 +42,9 @@ def test_api_authentication_is_optional_by_default(monkeypatch: pytest.MonkeyPat
     monkeypatch.setenv("AGENTPROOF_DB", str(tmp_path / "test.sqlite3"))
 
     with running_api() as base_url:
-        status, payload = request_status(base_url + "/")
+        status, payload = request_status(base_url + "/api/dashboard/overview")
     assert status == 200
-    assert payload["name"] == "AgentProof API"
+    assert payload["total_runs"] == 0
 
 
 def test_api_rejects_missing_and_invalid_bearer_tokens(
@@ -55,16 +55,16 @@ def test_api_rejects_missing_and_invalid_bearer_tokens(
     monkeypatch.setenv("AGENTPROOF_DB", str(tmp_path / "test.sqlite3"))
 
     with running_api() as base_url:
-        missing_status, missing_payload = request_status(base_url + "/")
-        invalid_status, invalid_payload = request_status(base_url + "/", "wrong-token")
-        valid_status, valid_payload = request_status(base_url + "/", "test-secret-token")
+        missing_status, missing_payload = request_status(base_url + "/api/dashboard/overview")
+        invalid_status, invalid_payload = request_status(base_url + "/api/dashboard/overview", "wrong-token")
+        valid_status, valid_payload = request_status(base_url + "/api/dashboard/overview", "test-secret-token")
 
     assert missing_status == 401
     assert missing_payload == {"error": "Unauthorized"}
     assert invalid_status == 401
     assert invalid_payload == {"error": "Unauthorized"}
     assert valid_status == 200
-    assert valid_payload["name"] == "AgentProof API"
+    assert valid_payload["total_runs"] == 0
 
 
 
