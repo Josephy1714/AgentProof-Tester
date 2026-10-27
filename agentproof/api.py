@@ -182,28 +182,28 @@ class Handler(BaseHTTPRequestHandler):
 
         try:
             content_length = int(self.headers.get("Content-Length", "0"))
-            if content_length < 1 or content_length > 65536:
-                self._send({"error": "Request body must be between 1 and 65536 bytes."}, 413)
+            if content_length < 1 or content_length > 16384:
+                self._send({"error": "Request body must be between 1 and 16384 bytes."}, 413)
                 return
             raw = json.loads(self.rfile.read(content_length))
             if not isinstance(raw, dict):
                 raise ValueError("Suite must be a JSON object.")
             tests_raw = raw.get("tests")
-            if not isinstance(tests_raw, list) or not 1 <= len(tests_raw) <= 25:
-                raise ValueError("Suite must contain between 1 and 25 tests.")
+            if not isinstance(tests_raw, list) or not 1 <= len(tests_raw) <= 10:
+                raise ValueError("Suite must contain between 1 and 10 tests.")
             tests = []
             for item in tests_raw:
                 if not isinstance(item, dict):
                     raise ValueError("Each test must be a JSON object.")
                 assertions_raw = item.get("assertions", [])
-                if not isinstance(assertions_raw, list) or len(assertions_raw) > 20:
-                    raise ValueError("Each test may contain at most 20 assertions.")
+                if not isinstance(assertions_raw, list) or len(assertions_raw) > 10:
+                    raise ValueError("Each test may contain at most 10 assertions.")
                 tests.append(TestCase(
                     id=item["id"],
                     input=item.get("input"),
                     assertions=tuple(AssertionSpec(**assertion) for assertion in assertions_raw),
                     category=item.get("category", "general"),
-                    timeout_seconds=min(float(item.get("timeout_seconds", 5.0)), 10.0),
+                    timeout_seconds=min(float(item.get("timeout_seconds", 2.0)), 2.0),
                     metadata=item.get("metadata", {}),
                 ))
             suite = EvaluationSuite(
