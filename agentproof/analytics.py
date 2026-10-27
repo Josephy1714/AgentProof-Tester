@@ -39,7 +39,7 @@ def overview(repo: RunRepository) -> dict[str, Any]:
     }
 
 
-def trends(repo: SQLiteRunRepository, limit: int = 50) -> list[dict[str, Any]]:
+def trends(repo: RunRepository, limit: int = 50) -> list[dict[str, Any]]:
     runs = repo.list_runs(limit)
     return [
         {
@@ -56,7 +56,7 @@ def trends(repo: SQLiteRunRepository, limit: int = 50) -> list[dict[str, Any]]:
     ]
 
 
-def group_by(repo: SQLiteRunRepository, field: str) -> list[dict[str, Any]]:
+def group_by(repo: RunRepository, field: str) -> list[dict[str, Any]]:
     rows = repo.list_runs(200)
     groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for run in rows:
