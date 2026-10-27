@@ -9,6 +9,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
 from agentproof.analytics import group_by, overview, trends
+from agentproof.cloud_storage import SupabaseHostedStorage, SupabaseStorageError
 from agentproof.regression import compare_runs
 from agentproof.storage import SQLiteRunRepository
 from agentproof.trace_storage import SQLiteTraceRepository
@@ -61,20 +62,48 @@ class Handler(BaseHTTPRequestHandler):
                 })
                 return
             if path == "/api/traces":
-                trace_repo = SQLiteTraceRepository(database)
-                self._send({
-                    "data": trace_repo.list_evaluations(
+                storage_mode = os.environ.get("AGENTPROOF_STORAGE", "sqlite").lower()
+                if storage_mode == "supabase":
+                    trace_rows = SupabaseHostedStorage().list_trace_evaluations(
                         int(q.get("limit", ["20"])[0]),
                         int(q.get("offset", ["0"])[0]),
                     )
-                })
+                    self._send({"data": [
+                        {
+                            "trace_id": row["trace_key"],
+                            "created_at": row["evaluated_at"],
+                            "passed": row["passed"],
+                            "score": row["score"],
+                            "summary": row["summary"],
+                        } for row in trace_rows
+                    ]})
+                elif storage_mode == "sqlite":
+                    trace_repo = SQLiteTraceRepository(database)
+                    self._send({
+                        "data": trace_repo.list_evaluations(
+                            int(q.get("limit", ["20"])[0]),
+                            int(q.get("offset", ["0"])[0]),
+                        )
+                    })
+                else:
+                    self._send({"error": "AGENTPROOF_STORAGE must be 'sqlite' or 'supabase'."}, 500)
                 return
             if path.startswith("/api/traces/"):
                 trace_id = path.removeprefix("/api/traces/")
                 if not trace_id or "/" in trace_id:
                     self._send({"error": "Trace evaluation not found"}, 404)
                     return
-                evaluation = SQLiteTraceRepository(database).get_evaluation(trace_id)
+                storage_mode = os.environ.get("AGENTPROOF_STORAGE", "sqlite").lower()
+                if storage_mode == "supabase":
+                    evaluation = SupabaseHostedStorage().get_trace_evaluation(trace_id)
+                    if evaluation is not None:
+                        evaluation["trace_id"] = evaluation.pop("trace_key")
+                        evaluation["created_at"] = evaluation.pop("evaluated_at")
+                elif storage_mode == "sqlite":
+                    evaluation = SQLiteTraceRepository(database).get_evaluation(trace_id)
+                else:
+                    self._send({"error": "AGENTPROOF_STORAGE must be 'sqlite' or 'supabase'."}, 500)
+                    return
                 if evaluation is None:
                     self._send({"error": "Trace evaluation not found"}, 404)
                 else:
@@ -100,6 +129,8 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(data)
                 return
             self._send({"name": "AgentProof API", "status": "ok"})
+        except SupabaseStorageError as exc:
+            self._send({"error": str(exc)}, 502)
         except (ValueError, TypeError) as exc:
             self._send({"error": str(exc)}, 400)
 
