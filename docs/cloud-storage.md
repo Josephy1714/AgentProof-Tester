@@ -1,6 +1,6 @@
 # Hosted storage foundation
 
-AgentProof remains local-first. This milestone includes a versioned migration and a readable schema snapshot; it does **not** connect the Python application to Supabase and has not been applied to a live project.
+AgentProof remains local-first. A versioned migration and readable schema snapshot define the hosted tables; the migration has not been applied to a live project.
 
 ## Schema snapshot
 
@@ -11,9 +11,9 @@ AgentProof remains local-first. This milestone includes a versioned migration an
 
 Both tables use `user_id` tied to `auth.users`, unique keys scoped to the owner, indexes for owner-filtered history, row-level security (RLS), and explicit policies for each operation. Unauthenticated access is revoked; authenticated users can only operate on rows whose `user_id` matches `auth.uid()`. Update policies use both `USING` and `WITH CHECK` so an owner cannot transfer a row to another account.
 
-## Python adapter (opt-in, not wired into the dashboard)
+## Python adapter and opt-in CLI/API routing
 
-`agentproof/cloud_storage.py` provides a stdlib-only REST adapter for saving and reading evaluation-run and trace-evaluation records. Set `AGENTPROOF_STORAGE=supabase` to opt the trace-evaluation CLI history and `/api/traces` endpoints into hosted storage; the default remains `sqlite`. The main evaluation-run history, analytics, and run endpoints remain SQLite-backed in this milestone.
+`agentproof/cloud_storage.py` provides a stdlib-only REST adapter for saving and reading evaluation-run and trace-evaluation records. Set `AGENTPROOF_STORAGE=supabase` to opt the evaluation CLI, run history commands, run-history/analytics API endpoints, trace-evaluation CLI history, and `/api/traces` endpoints into hosted storage; the default remains `sqlite`. Existing local SQLite workflows remain unchanged when the variable is unset.
 
 Configure these environment variables only when testing against a dedicated project where the reviewed migration has been applied:
 
@@ -28,7 +28,7 @@ The adapter calls Supabase Auth to verify the token and obtains the owner ID fro
 - Treat `schema.sql` as a reviewed baseline for a **dedicated AgentProof Supabase project**, not as an instruction to run against an unrelated existing project.
 - The migration is versioned but has not been applied or tested against a live Supabase database. Apply it only to a fresh, dedicated development project first; do not run it against an existing unrelated project or after manually applying the schema snapshot.
 - Run database policy tests for authenticated owner, authenticated non-owner, and anonymous users for SELECT, INSERT, UPDATE, and DELETE. Confirm both denied writes and zero-row reads behave as expected.
-- The schema has not been applied to a live database and no hosted integration is implemented by this change.
+- The schema has not been applied to a live database. Hosted routing has mocked tests only; no live Supabase integration test has been performed.
 - The future server must derive `user_id` from a verified Supabase Auth identity, never from an untrusted request body.
 - Never expose a Supabase service-role/secret key to the browser. Prefer user-scoped JWT access and RLS; keep any privileged key server-side only if a later architecture demonstrably needs it.
 - Keep local SQLite as the default and opt-in hosted storage so existing users are not forced to create an account or connect a cloud service.
@@ -36,6 +36,6 @@ The adapter calls Supabase Auth to verify the token and obtains the owner ID fro
 ## Next implementation steps
 
 1. Run the migration in a dedicated development project and add database-level RLS tests for owner, non-owner, and anonymous access.
-2. Extend hosted storage to run history and analytics, then establish per-request identity for multi-user dashboard access.
+2. Establish per-request identity for multi-user dashboard access and test cross-user isolation end to end.
 3. Add integration tests for identity ownership and cross-user isolation.
 4. Add hosted sign-in only after the backend can verify identity and enforce per-user access end to end.

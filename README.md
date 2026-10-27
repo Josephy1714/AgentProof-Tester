@@ -2,7 +2,7 @@
 
 **An evaluation and regression-testing platform foundation for AI agents.** AgentProof helps developers run reproducible suites, inspect evidence, compare versions, and track quality over time.
 
-> **Current status:** evaluation engine + deterministic simulated adapter + opt-in OpenAI-compatible adapter + SQLite run history + regression analytics + local dashboard API + data-backed dashboard + deterministic trace checks + bounded live tool-call trace capture + trace evaluation history/API + initial hosted-storage schema and opt-in Supabase trace-history adapter. Hosted sign-in, full run-history cloud integration and distributed jobs remain future work.
+> **Current status:** evaluation engine + deterministic simulated adapter + opt-in OpenAI-compatible adapter + SQLite run history + regression analytics + local dashboard API + data-backed dashboard + deterministic trace checks + bounded live tool-call trace capture + trace evaluation history/API + initial hosted-storage schema and opt-in Supabase trace/run-history and analytics adapter. Hosted sign-in and distributed jobs remain future work.
 
 ## Implemented
 
@@ -127,17 +127,6 @@ python -m agentproof.cli run examples/live_provider_suite.json --adapter openai-
 
 For another OpenAI-compatible gateway, use `--base-url`. Live requests may incur provider charges. API keys are never written into fingerprints or reports.
 
-## Browser live evaluation with OpenRouter
-
-The hosted dashboard supports two distinct modes:
-
-- **Simulated evaluation** runs deterministic fixtures without external API calls.
-- **Real AI evaluation** calls OpenRouter's `openrouter/free` router from the server. The public dashboard does not accept a model name or provider URL from the browser, and the live route is limited to three tests per run, 4,000 characters per prompt, 128 output tokens, and an 8-second request timeout.
-
-To enable live mode on Vercel, create a new OpenRouter API key and add it as an **encrypted server-side environment variable** named `OPENROUTER_API_KEY` for the AgentProof project (Production; add Preview only if you want to test preview deployments). Redeploy after adding it. Never use a `NEXT_PUBLIC_` prefix, put the key in suite JSON, or commit it to Git. If the key is missing, the API returns HTTP 503 and simulated runs continue to work.
-
-The browser's **Load real AI test** button loads a sample arithmetic prompt. Click **Run real AI evaluation** to call the real model and evaluate its response. Free-model availability and rate limits are controlled by OpenRouter; this is not a guarantee of production SLA or durable history. The hosted demo's SQLite history is temporary on serverless deployments.
-
 ## Dashboard and API
 
 Start the local API:
@@ -162,7 +151,7 @@ The existing dashboard includes KPI cards, score trends, test-health visualizati
 
 ## Hosted storage foundation
 
-A versioned Supabase migration and readable schema snapshot with per-user row-level security are documented in [Hosted storage foundation](docs/cloud-storage.md). The migration has **not** been applied to a live database. An opt-in adapter can persist trace-evaluation history and serve `/api/traces` from Supabase; local SQLite remains the default. Full hosted run history, analytics, and multi-user dashboard authentication are not implemented.
+A versioned Supabase migration and readable schema snapshot with per-user row-level security are documented in [Hosted storage foundation](docs/cloud-storage.md). The migration has **not** been applied to a live database. Set `AGENTPROOF_STORAGE=supabase` to opt the CLI's evaluation-run persistence/history commands and the run-history, analytics, and trace-history API routes into Supabase; unset it to keep SQLite as the default. Configure the three `AGENTPROOF_SUPABASE_*` variables described in the docs. This is a single-user access-token setup, not a multi-user hosted deployment. Live Supabase/RLS integration tests and dashboard sign-in are still outstanding.
 
 ## Architecture
 
@@ -181,7 +170,7 @@ Tool-calling agent -> Normalized trace -> Trace checks -> TraceRepository -> SQL
                                                            Trace API
 ```
 
-The storage boundary is intentionally replaceable. The opt-in Supabase adapter currently supports hosted run records and trace records at the adapter level, while CLI/API routing is enabled for trace history only.
+The storage boundary is intentionally replaceable. The opt-in Supabase adapter supports hosted run records and trace records; CLI/API routing uses it when `AGENTPROOF_STORAGE=supabase` is explicitly set.
 
 ## Development checks
 
