@@ -1,5 +1,6 @@
 import pytest
 from agentproof.adapters import SimulatedAdapter
+from agentproof.assertions import evaluate_assertion
 from agentproof.models import AssertionSpec, EvaluationSuite, TestCase, TestStatus
 from agentproof.runner import run_suite
 from agentproof.validation import SuiteValidationError, configuration_fingerprint, validate_suite
@@ -30,3 +31,26 @@ def test_fingerprint_changes_when_assertion_changes():
 def test_invalid_regex_rejected():
     with pytest.raises(SuiteValidationError, match="Invalid regex"):
         validate_suite(make_suite(TestCase("r", {}, (AssertionSpec("regex", pattern="["),))))
+
+
+def test_json_valid_assertion_accepts_object_json_string():
+    result = evaluate_assertion(AssertionSpec("json_valid", path="content"), {"content": '{"ok":true}'})
+    assert result.passed
+
+
+def test_json_valid_assertion_rejects_invalid_json():
+    result = evaluate_assertion(AssertionSpec("json_valid", path="content"), {"content": '{not json}'})
+    assert not result.passed
+
+
+def test_contains_any_is_case_insensitive():
+    result = evaluate_assertion(
+        AssertionSpec("contains_any", path="content", value=["cannot help", "unsafe"]),
+        {"content": "I cannot help with that request."},
+    )
+    assert result.passed
+
+
+def test_not_contains_assertion():
+    result = evaluate_assertion(AssertionSpec("not_contains", path="content", value="secret"), {"content": "SAFE"})
+    assert result.passed
