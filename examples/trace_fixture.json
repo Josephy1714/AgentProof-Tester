@@ -1,0 +1,46 @@
+{
+  "name": "Tool-use trace smoke checks",
+  "version": "1.0",
+  "note": "Illustrative trace fixture for agentproof.traces.evaluate_trace; it is not executed by the standard suite runner.",
+  "trace": [
+    {
+      "event_type": "tool_call",
+      "name": "search",
+      "arguments": {
+        "query": "weather",
+        "limit": 3
+      }
+    },
+    {
+      "event_type": "tool_result",
+      "name": "search",
+      "output": {
+        "summary": "Sunny"
+      }
+    },
+    {
+      "event_type": "assistant_message",
+      "content": "The forecast is sunny."
+    }
+  ],
+  "checks": [
+    {
+      "type": "tool_called",
+      "name": "search"
+    },
+    {
+      "type": "tool_not_called",
+      "name": "delete_file"
+    },
+    {
+      "type": "tool_argument_equals",
+      "name": "search",
+      "path": "limit",
+      "expected": 3
+    },
+    {
+      "type": "final_answer_contains",
+      "value": "sunny"
+    }
+  ]
+}
