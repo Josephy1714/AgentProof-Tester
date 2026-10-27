@@ -9,9 +9,12 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+from agentproof.adapters import SimulatedAdapter
 from agentproof.analytics import group_by, overview, trends
 from agentproof.cloud_storage import SupabaseHostedStorage, SupabaseStorageError
+from agentproof.models import AssertionSpec, EvaluationSuite, TestCase
 from agentproof.regression import compare_runs
+from agentproof.runner import run_suite
 from agentproof.storage import SQLiteRunRepository
 from agentproof.trace_storage import SQLiteTraceRepository
 
@@ -161,6 +164,61 @@ class Handler(BaseHTTPRequestHandler):
         except SupabaseStorageError as exc:
             self._send({"error": str(exc)}, 502)
         except (ValueError, TypeError) as exc:
+            self._send({"error": str(exc)}, 400)
+
+    def do_POST(self) -> None:
+        expected_token = os.environ.get("AGENTPROOF_API_TOKEN")
+        if expected_token:
+            authorization = self.headers.get("Authorization", "")
+            scheme, _, supplied_token = authorization.partition(" ")
+            if scheme.lower() != "bearer" or not supplied_token or not hmac.compare_digest(supplied_token, expected_token):
+                self._send({"error": "Unauthorized"}, 401)
+                return
+
+        path = urlparse(self.path).path.rstrip("/") or "/"
+        if path != "/api/runs":
+            self._send({"error": "Not found"}, 404)
+            return
+
+        try:
+            content_length = int(self.headers.get("Content-Length", "0"))
+            if content_length < 1 or content_length > 65536:
+                self._send({"error": "Request body must be between 1 and 65536 bytes."}, 413)
+                return
+            raw = json.loads(self.rfile.read(content_length))
+            if not isinstance(raw, dict):
+                raise ValueError("Suite must be a JSON object.")
+            tests_raw = raw.get("tests")
+            if not isinstance(tests_raw, list) or not 1 <= len(tests_raw) <= 25:
+                raise ValueError("Suite must contain between 1 and 25 tests.")
+            tests = []
+            for item in tests_raw:
+                if not isinstance(item, dict):
+                    raise ValueError("Each test must be a JSON object.")
+                assertions_raw = item.get("assertions", [])
+                if not isinstance(assertions_raw, list) or len(assertions_raw) > 20:
+                    raise ValueError("Each test may contain at most 20 assertions.")
+                tests.append(TestCase(
+                    id=item["id"],
+                    input=item.get("input"),
+                    assertions=tuple(AssertionSpec(**assertion) for assertion in assertions_raw),
+                    category=item.get("category", "general"),
+                    timeout_seconds=min(float(item.get("timeout_seconds", 5.0)), 10.0),
+                    metadata=item.get("metadata", {}),
+                ))
+            suite = EvaluationSuite(
+                name=str(raw.get("name", "Browser evaluation"))[:120],
+                version=str(raw.get("version", "1.0"))[:40],
+                tests=tuple(tests),
+                schema_version=str(raw.get("schema_version", "1.0"))[:20],
+                scoring_weights=raw.get("scoring_weights", {}),
+                metadata=raw.get("metadata", {}),
+            )
+            run = run_suite(suite, SimulatedAdapter(), {"mode": "simulated"})
+            repo = SQLiteRunRepository(_database_path())
+            repo.save_run(run, provider="simulated", model="synthetic")
+            self._send(run.to_dict(), 201)
+        except (json.JSONDecodeError, KeyError, TypeError, ValueError, OverflowError) as exc:
             self._send({"error": str(exc)}, 400)
 
     def log_message(self, format: str, *args: object) -> None:
