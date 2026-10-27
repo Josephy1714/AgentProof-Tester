@@ -1,6 +1,16 @@
 # Trace evaluation
 
-AgentProof now includes a dependency-free deterministic evaluator for recorded agent traces. It is an additive primitive; it does not itself capture live tool calls from a provider or execute tools.
+AgentProof includes a dependency-free deterministic evaluator for recorded agent traces. It does not itself capture live tool calls from a provider or execute tools.
+
+## Run a trace evaluation from the CLI
+
+A trace case is a JSON object with two arrays: `trace` (ordered event objects) and `checks` (check definitions). The example is ready to run:
+
+```bash
+python -m agentproof.cli trace-eval examples/trace_fixture.json --report trace-report.json
+```
+
+The command prints PASS/FAIL, score and counts, and writes per-check evidence to the JSON report. It exits with code **0** when all checks pass, **1** when valid checks fail, and **2** when the input cannot be loaded or is malformed. It does not create or update the SQLite run-history database. This command evaluates a recorded fixture only; it does not call a model or run a live agent.
 
 ## Trace event format
 
@@ -17,9 +27,9 @@ Pass an ordered list of JSON-like objects. Events use **event_type** values **to
 - **tool_result_contains**: inspect the latest result for a named tool.
 - **final_answer_contains**: check the last assistant message for required text.
 
-Example:
+## Python API
 
-~~~python
+```python
 from agentproof.traces import evaluate_trace
 
 trace = [
@@ -32,7 +42,7 @@ report = evaluate_trace(trace, [
     {"type": "max_tool_calls", "expected": 2},
     {"type": "final_answer_contains", "value": "sunny"},
 ])
-~~~
+```
 
 The report contains an overall pass, score, summary counts, and per-check evidence. Checks are deterministic string/structure comparisons, not semantic safety judgments. Empty check lists pass with score 1.0. Malformed or unsupported check definitions raise **ValueError**; a valid check that does not match returns a failed result.
 
