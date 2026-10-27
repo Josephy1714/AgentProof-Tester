@@ -77,7 +77,7 @@ def test_history_queries_are_owner_scoped_and_bounded() -> None:
     with patch("agentproof.cloud_storage.urlopen", side_effect=fake_urlopen):
         rows = storage.list_runs(limit=1000, offset=-10, suite="smoke")
 
-    assert rows[0]["run_key"] == "r1"
+    assert rows[0]["run_id"] == "r1"
     assert "user_id=eq.owner-123" in requests[1].full_url
     assert "limit=200" in requests[1].full_url
     assert "offset=0" in requests[1].full_url
@@ -91,3 +91,57 @@ def test_hosted_storage_requires_https_and_credentials() -> None:
         SupabaseHostedStorage("http://example.supabase.co", "key", "token")
     with pytest.raises(ValueError):
         SupabaseHostedStorage("https://example.supabase.co", "", "")
+
+
+
+def test_hosted_run_detail_rebuilds_typed_evaluation_run() -> None:
+    payload = {
+        "run_id": "run-7",
+        "suite_name": "smoke",
+        "suite_version": "1.0",
+        "config_fingerprint": "fingerprint",
+        "adapter_name": "test-adapter",
+        "simulated": True,
+        "started_at": "2026-10-27T10:00:00+00:00",
+        "duration_ms": 12.0,
+        "score": 1.0,
+        "summary": {"passed": 1, "failed": 0, "error": 0, "timeout": 0, "skipped": 0},
+        "results": [{
+            "test_id": "case-1",
+            "status": "passed",
+            "score": 1.0,
+            "duration_ms": 2.0,
+            "assertion_results": [{
+                "assertion_type": "equals",
+                "passed": True,
+                "message": "matched",
+                "expected": "yes",
+                "actual": "yes",
+            }],
+            "output": {"answer": "yes"},
+            "error_type": None,
+            "error_message": None,
+            "category": "general",
+        }],
+    }
+    responses = [FakeResponse({"id": "owner-1"}), FakeResponse([{"run_key": "run-7", "payload": payload}])]
+    requests: list[Any] = []
+
+    def fake_urlopen(request: Any, timeout: float) -> FakeResponse:
+        requests.append(request)
+        return responses.pop(0)
+
+    storage = SupabaseHostedStorage(
+        "https://example.supabase.co", "publishable-key", "user-token"
+    )
+    with patch("agentproof.cloud_storage.urlopen", side_effect=fake_urlopen):
+        run = storage.get_run("run-7")
+        test_results = storage.get_test_results("run-7")
+
+    assert run is not None
+    assert run.run_id == "run-7"
+    assert run.results[0].status == TestStatus.PASSED
+    assert run.results[0].assertion_results[0].actual == "yes"
+    assert test_results[0]["test_id"] == "case-1"
+    assert test_results[0]["assertions"][0]["passed"] is True
+    assert "user_id=eq.owner-1" in requests[1].full_url
