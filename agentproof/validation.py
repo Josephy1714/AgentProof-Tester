@@ -1,8 +1,13 @@
 """Suite validation and canonical evaluation fingerprints."""
 from __future__ import annotations
-import hashlib, json, math, re
+
+import hashlib
+import json
+import math
+import re
 from dataclasses import asdict
 from typing import Any
+
 from agentproof.models import EvaluationSuite
 
 SUPPORTED_SCHEMA_VERSIONS = {"1.0"}
@@ -38,8 +43,10 @@ def validate_suite(suite: EvaluationSuite) -> None:
             if assertion.type == "regex":
                 if not isinstance(assertion.pattern, str):
                     raise SuiteValidationError("Regex assertions require a string pattern")
-                try: re.compile(assertion.pattern)
-                except re.error as exc: raise SuiteValidationError(f"Invalid regex: {exc}") from exc
+                try:
+                    re.compile(assertion.pattern)
+                except re.error as exc:
+                    raise SuiteValidationError(f"Invalid regex: {exc}") from exc
             if assertion.type == "numeric_tolerance":
                 tol = assertion.tolerance
                 if isinstance(tol, bool) or not isinstance(tol, (int, float)) or not math.isfinite(tol) or tol < 0:
@@ -51,10 +58,14 @@ def validate_suite(suite: EvaluationSuite) -> None:
         raise SuiteValidationError("At least one scoring weight must be greater than zero")
 
 def _canonical(value: Any) -> Any:
-    if hasattr(value, "__dataclass_fields__"): return _canonical(asdict(value))
-    if isinstance(value, dict): return {str(k): _canonical(value[k]) for k in sorted(value, key=str)}
-    if isinstance(value, (tuple, list)): return [_canonical(v) for v in value]
-    if isinstance(value, float) and not math.isfinite(value): raise SuiteValidationError("Non-finite values cannot be fingerprinted")
+    if hasattr(value, "__dataclass_fields__"):
+        return _canonical(asdict(value))
+    if isinstance(value, dict):
+        return {str(k): _canonical(value[k]) for k in sorted(value, key=str)}
+    if isinstance(value, (tuple, list)):
+        return [_canonical(v) for v in value]
+    if isinstance(value, float) and not math.isfinite(value):
+        raise SuiteValidationError("Non-finite values cannot be fingerprinted")
     return value
 
 def configuration_fingerprint(suite: EvaluationSuite, adapter_name: str, adapter_config: dict[str, Any] | None = None) -> str:
