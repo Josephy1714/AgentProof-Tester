@@ -2,7 +2,7 @@
 
 **An evaluation and regression-testing platform foundation for AI agents.** AgentProof helps developers run reproducible suites, inspect evidence, compare versions, and track quality over time.
 
-> **Current status:** evaluation engine + deterministic simulated adapter + opt-in OpenAI-compatible adapter + SQLite run history + regression analytics + local dashboard API + data-backed dashboard + deterministic recorded-trace checks. Hosted auth, cloud persistence, live trace capture and distributed jobs are future work.
+> **Current status:** evaluation engine + deterministic simulated adapter + opt-in OpenAI-compatible adapter + SQLite run history + regression analytics + local dashboard API + data-backed dashboard + deterministic trace checks + bounded live tool-call trace capture + trace evaluation history/API. Hosted auth, cloud persistence and distributed jobs are future work.
 
 ## Implemented
 
@@ -21,6 +21,7 @@
 - Responsive charts, run detail inspection, empty states and data-backed KPIs.
 - Deterministic recorded-trace checks for tool presence/absence, call counts, ordered tool sequences, nested arguments, tool results and final-answer text.
 - Bounded OpenAI-compatible function-tool execution with caller-registered handlers and normalized trace capture.
+- SQLite persistence for trace evaluation inputs and per-check evidence, with API endpoints for trace history.
 - Tests and CI with Ruff, mypy and pytest.
 
 ## Quick start
@@ -62,31 +63,20 @@ Use `AGENTPROOF_DB` or `--db` to select another local database path. SQLite file
 
 ## Recorded trace evaluation
 
-The trace evaluator checks a caller-supplied sequence of structured events; it does not execute tools or capture live provider traces.
-
-```python
-from agentproof.traces import evaluate_trace
-
-trace = [
-    {"event_type": "tool_call", "name": "search", "arguments": {"query": "weather"}},
-    {"event_type": "tool_result", "name": "search", "output": "Sunny"},
-    {"event_type": "assistant_message", "content": "The forecast is sunny."},
-]
-report = evaluate_trace(trace, [
-    {"type": "tool_called", "name": "search"},
-    {"type": "tool_not_called", "name": "delete_file"},
-    {"type": "max_tool_calls", "expected": 2},
-    {"type": "final_answer_contains", "value": "sunny"},
-])
-```
-
-See [Trace evaluation](docs/traces.md) for the event schema and supported checks. Evaluate a JSON fixture directly from the CLI:
+The trace evaluator checks a sequence of structured events and returns per-check evidence. It does not require a model call when evaluating fixtures.
 
 ```bash
 python -m agentproof.cli trace-eval examples/trace_fixture.json --report trace-report.json
 ```
 
-The command exits with code 0 when all checks pass, 1 when valid checks fail, and 2 for invalid input or runtime errors. It writes per-check evidence to the report. It does not call a model, execute tools, or create a run-history database entry.
+By default, the command writes the JSON report and stores the trace, checks, and evidence in the local SQLite history. Use `--no-history` to avoid storing trace payloads. Exit codes are 0 for all checks passing, 1 for valid checks failing, and 2 for invalid input or runtime errors.
+
+Trace history API endpoints:
+
+- `/api/traces` — recent trace-evaluation summaries
+- `/api/traces/<trace-id>` — full trace, checks and per-check results
+
+See [Trace evaluation](docs/traces.md) for event format, supported checks, history behavior, and the live tool-execution Python API. Live trace capture is not yet a CLI command or a dashboard view.
 
 ## Live provider evaluation
 
@@ -114,8 +104,10 @@ Endpoints include:
 - `/api/analytics/trends`
 - `/api/analytics/models`
 - `/api/analytics/suites`
+- `/api/traces`
+- `/api/traces/<trace-id>`
 
-The dashboard includes KPI cards, score trends, test-health visualization, recent runs, run-level evidence, regression summaries, model/suite analytics, and responsive empty/error states.
+The existing dashboard includes KPI cards, score trends, test-health visualization, recent runs, run-level evidence, regression summaries, model/suite analytics, and responsive empty/error states. Trace history is currently API-only.
 
 ## Architecture
 
@@ -129,7 +121,9 @@ Adapters -> Evaluation Runner -> EvaluationRun -> RunRepository -> SQLite
                                                  |
                                             Web Dashboard
 
-Recorded trace -> Trace checks -> Per-check evidence
+Tool-calling agent -> Normalized trace -> Trace checks -> TraceRepository -> SQLite
+                                                               |
+                                                           Trace API
 ```
 
 The storage boundary is intentionally replaceable so a future Postgres/Supabase implementation can be introduced without coupling evaluation logic to a database vendor.
@@ -148,7 +142,7 @@ Keep provider keys in environment variables. Evaluation inputs, traces and outpu
 
 ## Roadmap
 
-See `docs/roadmap.md`. Next priorities are live trace capture and persistence, then hosted persistence, authentication, async jobs, scheduling and production deployment.
+See `docs/roadmap.md`. Next priorities are dashboard trace exploration, integration of live tool runs with trace evaluation, hosted persistence, authentication, async jobs, scheduling and production deployment.
 
 ## License
 
