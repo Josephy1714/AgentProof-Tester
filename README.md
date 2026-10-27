@@ -127,6 +127,17 @@ python -m agentproof.cli run examples/live_provider_suite.json --adapter openai-
 
 For another OpenAI-compatible gateway, use `--base-url`. Live requests may incur provider charges. API keys are never written into fingerprints or reports.
 
+## Browser live evaluation with OpenRouter
+
+The hosted dashboard supports two distinct modes:
+
+- **Simulated evaluation** runs deterministic fixtures without external API calls.
+- **Real AI evaluation** calls OpenRouter's `openrouter/free` router from the server. The public dashboard does not accept a model name or provider URL from the browser, and the live route is limited to three tests per run, 4,000 characters per prompt, 128 output tokens, and an 8-second request timeout.
+
+To enable live mode on Vercel, create a new OpenRouter API key and add it as an **encrypted server-side environment variable** named `OPENROUTER_API_KEY` for the AgentProof project (Production; add Preview only if you want to test preview deployments). Redeploy after adding it. Never use a `NEXT_PUBLIC_` prefix, put the key in suite JSON, or commit it to Git. If the key is missing, the API returns HTTP 503 and simulated runs continue to work.
+
+The browser's **Load real AI test** button loads a sample arithmetic prompt. Click **Run real AI evaluation** to call the real model and evaluate its response. Free-model availability and rate limits are controlled by OpenRouter; this is not a guarantee of production SLA or durable history. The hosted demo's SQLite history is temporary on serverless deployments.
+
 ## Dashboard and API
 
 Start the local API:
