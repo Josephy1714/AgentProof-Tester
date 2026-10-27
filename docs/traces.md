@@ -36,6 +36,16 @@ report = evaluate_trace(trace, [
 
 The report contains an overall pass, score, summary counts, and per-check evidence. Checks are deterministic string/structure comparisons, not semantic safety judgments. Empty check lists pass with score 1.0. Malformed or unsupported check definitions raise **ValueError**; a valid check that does not match returns a failed result.
 
+## Command-line usage
+
+The repository includes a fixture at `examples/trace_fixture.json`. Run it without making a provider request:
+
+```bash
+python -m agentproof.cli trace-eval examples/trace_fixture.json --report trace-report.json
+```
+
+The fixture JSON uses top-level `trace` and `checks` arrays. The report is written as JSON and contains the same pass/score/summary/per-check evidence returned by `evaluate_trace`. Exit codes are CI-friendly: `0` means every check passed, `1` means at least one valid check failed, and `2` means the fixture or check definitions were invalid or unreadable. This command does not create a model evaluation run or modify run history.
+
 ## Current boundary
 
 This module evaluates traces supplied by the caller. The existing OpenAI-compatible adapter currently performs a single chat-completion request and does not capture or execute tool calls. Live trace capture, persistence, API endpoints, dashboard trace exploration, and model-specific tool execution remain future work. Do not treat these checks as a complete prompt-injection or safety evaluation system.
