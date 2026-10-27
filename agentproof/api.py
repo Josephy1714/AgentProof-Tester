@@ -108,6 +108,12 @@ class Handler(BaseHTTPRequestHandler):
 
 
 def serve(host: str = "127.0.0.1", port: int = 8000) -> None:
+    """Run the API; non-loopback binds require explicit bearer-token protection."""
+    if host not in {"127.0.0.1", "::1", "localhost"} and not os.environ.get("AGENTPROOF_API_TOKEN"):
+        raise RuntimeError(
+            "Refusing to bind the AgentProof API to a non-loopback host without "
+            "AGENTPROOF_API_TOKEN. Set a long random token or bind to 127.0.0.1."
+        )
     ThreadingHTTPServer((host, port), Handler).serve_forever()
 
 
