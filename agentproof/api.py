@@ -9,7 +9,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from agentproof.adapters import SimulatedAdapter
+from agentproof.adapters import OpenAICompatibleAdapter, SimulatedAdapter
 from agentproof.analytics import group_by, overview, trends
 from agentproof.cloud_storage import SupabaseHostedStorage, SupabaseStorageError
 from agentproof.models import AssertionSpec, EvaluationSuite, TestCase
@@ -188,22 +188,43 @@ class Handler(BaseHTTPRequestHandler):
             raw = json.loads(self.rfile.read(content_length))
             if not isinstance(raw, dict):
                 raise ValueError("Suite must be a JSON object.")
+            provider = str(raw.get("provider", "simulated")).lower()
+            if provider not in {"simulated", "openrouter"}:
+                raise ValueError("Provider must be 'simulated' or 'openrouter'.")
+            api_key = os.environ.get("OPENROUTER_API_KEY") if provider == "openrouter" else None
+            if provider == "openrouter" and not api_key:
+                self._send({
+                    "error": "Live runs are not configured yet. Add OPENROUTER_API_KEY as a server-side Vercel environment secret, then redeploy."
+                }, 503)
+                return
+
             tests_raw = raw.get("tests")
-            if not isinstance(tests_raw, list) or not 1 <= len(tests_raw) <= 10:
-                raise ValueError("Suite must contain between 1 and 10 tests.")
+            max_tests = 3 if provider == "openrouter" else 10
+            if not isinstance(tests_raw, list) or not 1 <= len(tests_raw) <= max_tests:
+                raise ValueError(f"Suite must contain between 1 and {max_tests} tests for this provider.")
             tests = []
+            timeout_cap = 8.0 if provider == "openrouter" else 2.0
             for item in tests_raw:
                 if not isinstance(item, dict):
                     raise ValueError("Each test must be a JSON object.")
                 assertions_raw = item.get("assertions", [])
-                if not isinstance(assertions_raw, list) or len(assertions_raw) > 10:
-                    raise ValueError("Each test may contain at most 10 assertions.")
+                if not isinstance(assertions_raw, list) or not 1 <= len(assertions_raw) <= 10:
+                    raise ValueError("Each test must contain between 1 and 10 assertions.")
+                test_input = item.get("input")
+                if provider == "openrouter":
+                    if not isinstance(test_input, dict) or not (
+                        isinstance(test_input.get("prompt"), str)
+                        or isinstance(test_input.get("messages"), list)
+                    ):
+                        raise ValueError("Real-model tests need input.prompt or input.messages.")
+                    if isinstance(test_input.get("prompt"), str) and len(test_input["prompt"]) > 4000:
+                        raise ValueError("Each live prompt must be 4000 characters or fewer.")
                 tests.append(TestCase(
                     id=item["id"],
-                    input=item.get("input"),
+                    input=test_input,
                     assertions=tuple(AssertionSpec(**assertion) for assertion in assertions_raw),
                     category=item.get("category", "general"),
-                    timeout_seconds=min(float(item.get("timeout_seconds", 2.0)), 2.0),
+                    timeout_seconds=min(float(item.get("timeout_seconds", timeout_cap)), timeout_cap),
                     metadata=item.get("metadata", {}),
                 ))
             suite = EvaluationSuite(
@@ -214,9 +235,25 @@ class Handler(BaseHTTPRequestHandler):
                 scoring_weights=raw.get("scoring_weights", {}),
                 metadata=raw.get("metadata", {}),
             )
-            run = run_suite(suite, SimulatedAdapter(), {"mode": "simulated"})
+            if provider == "openrouter":
+                # Free router only: no user-controlled model name, base URL, or paid model calls.
+                adapter = OpenAICompatibleAdapter(
+                    model="openrouter/free",
+                    base_url="https://openrouter.ai/api/v1",
+                    api_key=api_key,
+                    request_timeout=8.0,
+                    max_tokens=128,
+                )
+                run = run_suite(
+                    suite, adapter,
+                    {"provider": "openrouter", "model": "openrouter/free", "mode": "live"},
+                )
+                model = "openrouter/free"
+            else:
+                run = run_suite(suite, SimulatedAdapter(), {"mode": "simulated"})
+                model = "synthetic"
             repo = SQLiteRunRepository(_database_path())
-            repo.save_run(run, provider="simulated", model="synthetic")
+            repo.save_run(run, provider=provider, model=model)
             self._send(run.to_dict(), 201)
         except (json.JSONDecodeError, KeyError, TypeError, ValueError, OverflowError) as exc:
             self._send({"error": str(exc)}, 400)
