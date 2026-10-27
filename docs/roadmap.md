@@ -1,23 +1,24 @@
-# Roadmap and status
+# Roadmap
 
-## Foundation
-- [x] Typed core contracts
-- [x] Deterministic assertions
-- [x] Suite validation
-- [x] Simulated adapter
-- [x] Basic runner and JSON report
-- [x] Pass/fail regression and recovery comparison
-- [x] Local CLI and CI workflow
-- [x] OpenAI-compatible Chat Completions adapter with environment-based secrets
-- [x] Offline adapter tests that do not make provider requests
+## Phase 1 — foundation
+- Versioned suites, deterministic assertions, isolated runner, regression comparison, tests and CI.
 
-## Next milestones
-- [ ] Apply category weights with documented semantics
-- [ ] Add process-isolated timeout execution
-- [ ] Add adapter contract tests and trace schema
-- [ ] Add provider-specific integrations and tool-call/trajectory capture
-- [ ] Add persistent run history and comparison API
-- [ ] Build a dashboard backed by actual run data
-- [ ] Threat model, authentication, authorization, retention, and deployment verification
+## Phase 2 — provider integration
+- Optional OpenAI-compatible Chat Completions adapter with environment-only credentials.
 
-Unchecked items are planned, not implemented. The live provider adapter is opt-in and may incur API charges. No live request or production deployment is implied by CI passing.
+## Phase 3 — evaluation platform (current)
+- SQLite run history behind a repository abstraction.
+- Persisted test-level evidence and run metadata.
+- Regression intelligence with new/removed, regressed, recovered and persistent failures.
+- Analytics for scores, pass/error rates, suites and models.
+- Local JSON HTTP API.
+- Data-backed dashboard with Overview, Evaluations, Test Suites, Regression, Analytics, Models and Settings sections.
+
+## Phase 4 — production platform
+- Hosted Postgres/Supabase persistence.
+- Authentication, organizations and project permissions.
+- Async evaluation jobs and durable workers.
+- Agent traces, tool-call/trajectory evaluation and safety suites.
+- Scheduling, notifications, report sharing and production deployment.
+
+The current release does not claim those Phase 4 capabilities.

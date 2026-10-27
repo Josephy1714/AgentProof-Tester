@@ -1,30 +1,31 @@
-# Python API and suite format
+# API
 
-The current supported entry point is `run_suite(suite, adapter, adapter_config=None)`. It validates a typed `EvaluationSuite`, invokes the adapter for each test, evaluates deterministic assertions, and returns an `EvaluationRun`. The local CLI currently selects `SimulatedAdapter` explicitly.
+Start the local data API with:
 
-## Assertion schema
-
-Supported assertion types are `equals`, `contains`, `is_type`, `numeric_tolerance`, `regex`, and `has_key`. Optional `path` addresses nested object fields using dot notation and list indices. `regex` uses `pattern`; `contains` uses `value`; `numeric_tolerance` uses `expected` and a non-negative `tolerance`.
-
-Every test must include one or more assertions. Only schema version `1.0` is currently accepted. Invalid suite definitions fail validation before adapter execution.
-
-## Example
-
-```json
-{
-  "name": "sample-suite",
-  "version": "1.0.0",
-  "schema_version": "1.0",
-  "tests": [{
-    "id": "returns-status",
-    "input": {"simulated_output": {"status": "ok"}},
-    "assertions": [{"type": "equals", "path": "status", "expected": "ok"}]
-  }]
-}
+```bash
+python -m agentproof.api
 ```
 
-## Result semantics
+It listens on `127.0.0.1:8000` and reads `AGENTPROOF_DB` or `agentproof.sqlite3`.
 
-Each test result has a status of `passed`, `failed`, `error`, `timeout`, or `skipped`. Assertion failures are different from adapter exceptions and timeouts. The run has a random execution ID and a stable configuration fingerprint. Scores are the unweighted mean of assertion outcomes per test and then the unweighted mean of test scores; category weights are validated but not yet applied.
+## Endpoints
 
-The current simulated adapter is for development only. Do not interpret its output as a live model evaluation.
+- `GET /api/dashboard/overview` — KPI metrics from stored runs.
+- `GET /api/runs?limit=50&offset=0&suite=&model=` — newest persisted runs.
+- `GET /api/runs/<run_id>` — run metadata plus test-level evidence.
+- `GET /api/runs/<run_id>/regression` — comparison against the previous run for the same suite.
+- `GET /api/analytics/trends` — chronological score/test health data.
+- `GET /api/analytics/models` — model aggregates from run metadata.
+- `GET /api/analytics/suites` — suite aggregates.
+
+The API is intentionally dependency-free and local-first. It is a foundation for a future authenticated hosted API, not a production multi-tenant service.
+
+## Run history CLI
+
+```bash
+python -m agentproof.cli run examples/basic_suite.json
+python -m agentproof.cli runs
+python -m agentproof.cli run-show <run-id>
+```
+
+The first command persists the completed run to SQLite and also writes the JSON report.
