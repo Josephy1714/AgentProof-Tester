@@ -124,7 +124,7 @@ def test_hosted_run_detail_rebuilds_typed_evaluation_run() -> None:
             "category": "general",
         }],
     }
-    responses = [FakeResponse({"id": "owner-1"}), FakeResponse([{"run_key": "run-7", "payload": payload}])]
+    responses = [FakeResponse({"id": "owner-1"}), FakeResponse([{"run_key": "run-7", "payload": payload}]), FakeResponse([{"run_key": "run-7", "payload": payload}])]
     requests: list[Any] = []
 
     def fake_urlopen(request: Any, timeout: float) -> FakeResponse:
