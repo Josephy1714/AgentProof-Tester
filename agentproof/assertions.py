@@ -7,6 +7,7 @@ from typing import Any
 
 from agentproof.models import AssertionResult, AssertionSpec
 
+
 def _path(value: Any, path: str | None) -> Any:
     if not path:
         return value
@@ -22,6 +23,7 @@ def _path(value: Any, path: str | None) -> Any:
             raise KeyError(f"Cannot resolve path component {part!r}")
     return current
 
+
 def evaluate_assertion(spec: AssertionSpec, output: Any) -> AssertionResult:
     try:
         actual = _path(output, spec.path)
@@ -30,8 +32,22 @@ def evaluate_assertion(spec: AssertionSpec, output: Any) -> AssertionResult:
         elif spec.type == "contains":
             passed = spec.value in actual
         elif spec.type == "is_type":
-            types = {"string": str, "integer": int, "number": (int, float), "boolean": bool, "array": list, "object": dict, "null": type(None)}
-            passed = isinstance(actual, types[spec.expected]) and not (spec.expected == "integer" and isinstance(actual, bool))
+            if spec.expected == "string":
+                passed = isinstance(actual, str)
+            elif spec.expected == "integer":
+                passed = isinstance(actual, int) and not isinstance(actual, bool)
+            elif spec.expected == "number":
+                passed = isinstance(actual, (int, float)) and not isinstance(actual, bool)
+            elif spec.expected == "boolean":
+                passed = isinstance(actual, bool)
+            elif spec.expected == "array":
+                passed = isinstance(actual, list)
+            elif spec.expected == "object":
+                passed = isinstance(actual, dict)
+            elif spec.expected == "null":
+                passed = actual is None
+            else:
+                raise ValueError(f"Unsupported type target: {spec.expected!r}")
         elif spec.type == "numeric_tolerance":
             if isinstance(actual, bool) or not isinstance(actual, (int, float)) or not math.isfinite(actual):
                 passed = False
