@@ -23,6 +23,8 @@
 - Bounded OpenAI-compatible function-tool execution with caller-registered handlers and normalized trace capture.
 - SQLite persistence for trace-evaluation inputs, check definitions, summaries and per-check evidence, with API endpoints for trace history.
 - Tests and CI with Ruff, mypy and pytest.
+- JSON validity, case-insensitive contains-any and not-contains assertion operators.
+- Browser-cached run evidence, robustness/JSON/safety templates, and fixed-free-model comparison reports.
 
 ## Quick start
 
@@ -132,11 +134,15 @@ For another OpenAI-compatible gateway, use `--base-url`. Live requests may incur
 The hosted dashboard supports two distinct modes:
 
 - **Simulated evaluation** runs deterministic fixtures without external API calls.
-- **Real AI evaluation** calls OpenRouter's `openrouter/free` router from the server. The public dashboard does not accept a model name or provider URL from the browser, and the live route is limited to three tests per run, 4,000 characters per prompt, 128 output tokens, and an 8-second request timeout.
+- **Real AI evaluation** calls OpenRouter's `openrouter/free` router from the server. The public dashboard never accepts a provider URL from the browser. It allows the free router plus a short fixed allowlist of free model IDs for controlled comparisons; arbitrary model IDs and paid-model selection are rejected. The live route is limited to three tests per run, 4,000 characters per prompt, 128 output tokens, and an 8-second per-request timeout.
 
 To enable live mode on Vercel, create a new OpenRouter API key and add it as an **encrypted server-side environment variable** named `OPENROUTER_API_KEY` for the AgentProof project (Production; add Preview only if you want to test preview deployments). Redeploy after adding it. Never use a `NEXT_PUBLIC_` prefix, put the key in suite JSON, or commit it to Git. If the key is missing, the API returns HTTP 503 and simulated runs continue to work.
 
-The browser's **Load real AI test** button loads a sample arithmetic prompt. Click **Run real AI evaluation** to call the real model and evaluate its response. Free-model availability and rate limits are controlled by OpenRouter; this is not a guarantee of production SLA or durable history. The hosted demo's SQLite history is temporary on serverless deployments.
+The browser's **Load real AI test** button loads a sample arithmetic prompt. Click **Run real AI evaluation** to call a real model and evaluate its response. **Load robustness suite**, **Load JSON test**, and **Load safety suite** provide starter checks for exact instruction-following, arithmetic/factual answers, JSON formatting, prompt-injection resistance, and refusal boundaries. The safety suite uses phrase-based heuristics and is not a semantic safety judge.
+
+**Compare 3 models** submits the same suite to three allowlisted free models and displays pass score, latency, and returned model metadata. A free model can become unavailable or rate-limited, and one run per model is only a smoke comparison—not a statistically reliable ranking. OpenRouter's free router may choose different models for different prompts.
+
+Completed browser runs are cached in `localStorage` (up to 25 reports) so they survive refreshes on the same browser/device. This is a local cache, not server-side or cross-device persistence. The hosted demo's SQLite history is temporary on serverless deployments; permanent shared history still requires applying the provided Supabase migration and completing user-authenticated hosted-storage configuration. No live database was changed by this code change.
 
 ## Dashboard and API
 
