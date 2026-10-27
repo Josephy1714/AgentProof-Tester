@@ -1,25 +1,25 @@
 # Trace evaluation
 
-AgentProof includes a dependency-free deterministic evaluator for recorded agent traces. It can evaluate caller-supplied events and can capture traces from bounded OpenAI-compatible tool-calling runs.
+AgentProof provides deterministic checks for recorded traces, bounded OpenAI-compatible tool-calling execution, and SQLite-backed history for trace evaluations.
 
 ## Trace event format
 
-Pass an ordered list of JSON-like objects. Events use **event_type** values **tool_call**, **tool_result**, or **assistant_message**. Tool calls may include **name** and structured **arguments**; tool results may include **output** or **content**; assistant messages use **content**.
+Pass an ordered list of JSON-like objects. Events use `event_type` values `tool_call`, `tool_result`, or `assistant_message`. Tool calls may include `name` and structured `arguments`; tool results may include `output` or `content`; assistant messages use `content`.
 
 ## Supported checks
 
-- **tool_called**: require a named tool to appear.
-- **tool_not_called**: assert a named tool never appears.
-- **tool_call_count**: require an exact number of tool calls.
-- **max_tool_calls**: enforce an upper bound on tool calls.
-- **tool_sequence**: require named calls in order (other calls may occur between them).
-- **tool_argument_equals**: compare a nested argument path for the first matching call.
-- **tool_result_contains**: inspect the latest result for a named tool.
-- **final_answer_contains**: check the last assistant message for required text.
+- `tool_called`: require a named tool to appear.
+- `tool_not_called`: assert a named tool never appears.
+- `tool_call_count`: require an exact number of tool calls.
+- `max_tool_calls`: enforce an upper bound on tool calls.
+- `tool_sequence`: require named calls in order (other calls may occur between them).
+- `tool_argument_equals`: compare a nested argument path for the first matching call.
+- `tool_result_contains`: inspect the latest result for a named tool.
+- `final_answer_contains`: check the last assistant message for required text.
 
 Example:
 
-~~~python
+```python
 from agentproof.traces import evaluate_trace
 
 trace = [
@@ -32,54 +32,73 @@ report = evaluate_trace(trace, [
     {"type": "max_tool_calls", "expected": 2},
     {"type": "final_answer_contains", "value": "sunny"},
 ])
-~~~
+```
 
-The report contains an overall pass, score, summary counts, and per-check evidence. Checks are deterministic string/structure comparisons, not semantic safety judgments. Empty check lists pass with score 1.0. Malformed or unsupported check definitions raise **ValueError**; a valid check that does not match returns a failed result.
+The report contains an overall pass, score, summary counts, and per-check evidence. Checks are deterministic string/structure comparisons, not semantic safety judgments. Empty check lists pass with score 1.0. Malformed or unsupported check definitions raise `ValueError`; a valid check that does not match returns a failed result.
 
 ## Command-line usage and history
 
-The repository includes a fixture at `examples/trace_fixture.json`. Run it without making a provider request:
+Run the included fixture without making a provider request:
 
-~~~bash
+```bash
 python -m agentproof.cli trace-eval examples/trace_fixture.json --report trace-report.json
-~~~
+```
 
-By default, this writes a JSON report and saves the trace, checks, and per-check evidence in the local SQLite database selected by `--db` (default `agentproof.sqlite3`). Use `--no-history` to avoid storing the trace payload. Trace evaluation history is accessible through `/api/traces` and `/api/traces/<trace-id>` when the local API is running. The report contains the same pass/score/summary/per-check evidence returned by `evaluate_trace`.
+By default, this writes a JSON report and saves the input trace, checks, and per-check evidence in the local SQLite database selected by `--db` (default `agentproof.sqlite3`). Use `--no-history` to avoid storing trace payloads. The command prints the generated trace history ID when persistence is enabled.
 
-Exit codes are CI-friendly: `0` means every check passed, `1` means at least one valid check failed, and `2` means the fixture or check definitions were invalid or unreadable.
+Exit codes are CI-friendly: `0` means every check passed, `1` means at least one valid check failed, and `2` means the fixture, check definitions, or runtime operation was invalid or failed.
 
-## Capturing traces from a live tool-calling conversation
+Trace history is separate from standard suite-run history. The local API exposes:
 
-`agentproof.tool_execution.run_tool_agent` makes bounded Chat Completions requests with function tools, executes only explicitly registered Python handlers, and returns the final answer plus ordered `tool_call`, `tool_result`, and `assistant_message` events. It accepts OpenAI-compatible tool schemas and a mapping of tool names to Python callables. Set the provider key in the environment (default `OPENAI_API_KEY`) or pass `api_key` explicitly.
+- `GET /api/traces?limit=20&offset=0` — recent summary records, without full trace payloads.
+- `GET /api/traces/<trace-id>` — full trace, check definitions, and per-check evidence.
 
-Example outline:
+The listing limit is bounded by the repository implementation. These endpoints use the same local SQLite database path configured by `AGENTPROOF_DB`. The API is currently a local development API without authentication; do not expose it to untrusted networks.
 
-~~~python
-from agentproof.tool_execution import run_tool_agent
+## Capturing and evaluating a live tool-calling conversation
 
-result = run_tool_agent(
-    [{"role": "user", "content": "Look up the weather in Nairobi."}],
-    [{"type": "function", "function": {
-        "name": "lookup_weather",
-        "description": "Look up weather for a city",
-        "parameters": {
-            "type": "object",
-            "properties": {"city": {"type": "string"}},
-            "required": ["city"],
+Use `agentproof.tool_evaluation.run_and_evaluate_tool_agent` to execute a bounded conversation and evaluate the captured trace in one call:
+
+```python
+from agentproof.tool_evaluation import run_and_evaluate_tool_agent
+
+report = run_and_evaluate_tool_agent(
+    messages=[{"role": "user", "content": "Look up the weather in Nairobi."}],
+    tools=[{
+        "type": "function",
+        "function": {
+            "name": "lookup_weather",
+            "description": "Look up weather for a city",
+            "parameters": {
+                "type": "object",
+                "properties": {"city": {"type": "string"}},
+                "required": ["city"],
+            },
         },
-    }}],
-    {"lookup_weather": lambda args: {"city": args["city"], "forecast": "sunny"}},
+    }],
+    handlers={
+        "lookup_weather": lambda args: {
+            "city": args["city"],
+            "forecast": "sunny",
+        }
+    },
+    checks=[
+        {"type": "tool_called", "name": "lookup_weather"},
+        {"type": "final_answer_contains", "value": "sunny"},
+    ],
     model="your-tool-capable-model",
 )
-trace = result["trace"]
-checks = [{"type": "tool_called", "name": "lookup_weather"}]
-report = evaluate_trace(trace, checks)
-~~~
+print(report["passed"])
+print(report["evaluation"]["results"])
+```
 
-The loop is bounded by `max_turns` (default 8). If the limit is reached, `completed` is false and `stop_reason` is `max_turns`. Handler exceptions are captured as tool-result errors and returned to the model for possible recovery. Live trace capture is currently a Python API; the CLI trace-eval command evaluates fixtures rather than initiating provider calls.
+Set the API key through `OPENAI_API_KEY` or pass `api_key` explicitly. The default endpoint is OpenAI-compatible Chat Completions; pass `base_url` to use a compatible gateway. The run is bounded by `max_turns` (default 8). Reaching the turn limit makes the overall report fail, even if checks on the partial trace pass. The report includes completion status, final answer, model usage, captured events, and per-check evidence. Live execution is a Python API; the CLI command above evaluates recorded fixtures and does not initiate provider calls. Live provider requests may incur charges.
 
-**Security:** registered handlers run as ordinary Python functions in your process, not in a sandbox. Only register tools you trust, validate arguments inside handlers, and avoid exposing filesystem, shell, network, or other privileged capabilities unless intentionally required. Provider requests may incur charges.
+**Security:** registered handlers run as ordinary Python functions in the caller's process, not in a sandbox. Only register trusted handlers, validate arguments inside handlers, and avoid exposing filesystem, shell, network, or other privileged capabilities unless intentionally required. Credentials are not included in returned reports.
 
-## Current boundary
+## Current boundaries
 
-Trace evaluation history is separate from standard suite-run history. The API exposes summary listings and individual trace records, but the existing dashboard does not yet provide a trace-history view. Do not treat these checks as a complete prompt-injection or safety evaluation system.
+- Trace history is not mixed with normal suite-run history.
+- Trace history is currently API-only; the existing dashboard does not yet provide a trace-history view.
+- The API is intended for local development and does not provide authentication or production multi-tenant isolation.
+- Deterministic trace checks do not guarantee factual correctness, prompt-injection resistance, or overall agent safety.
