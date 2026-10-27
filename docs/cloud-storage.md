@@ -11,6 +11,18 @@ AgentProof remains local-first. This milestone includes a versioned migration an
 
 Both tables use `user_id` tied to `auth.users`, unique keys scoped to the owner, indexes for owner-filtered history, row-level security (RLS), and explicit policies for each operation. Unauthenticated access is revoked; authenticated users can only operate on rows whose `user_id` matches `auth.uid()`. Update policies use both `USING` and `WITH CHECK` so an owner cannot transfer a row to another account.
 
+## Python adapter (opt-in, not wired into the dashboard)
+
+`agentproof/cloud_storage.py` provides a stdlib-only REST adapter for saving and reading evaluation-run and trace-evaluation records. It keeps SQLite untouched and is not selected automatically by the CLI or local dashboard yet.
+
+Configure these environment variables only when testing against a dedicated project where the reviewed migration has been applied:
+
+- `AGENTPROOF_SUPABASE_URL`: the project's HTTPS URL.
+- `AGENTPROOF_SUPABASE_ANON_KEY`: the project's publishable/anon key.
+- `AGENTPROOF_SUPABASE_ACCESS_TOKEN`: a real user access token issued by Supabase Auth.
+
+The adapter calls Supabase Auth to verify the token and obtains the owner ID from that verified response; it does not trust a user ID passed by the caller. Data requests include the user token so RLS remains authoritative. Never use a service-role/secret key as the publishable key or access token. Mocked unit tests validate request construction and owner scoping; they do not prove that the migration works against a live database.
+
 ## Important security and deployment notes
 
 - Treat `schema.sql` as a reviewed baseline for a **dedicated AgentProof Supabase project**, not as an instruction to run against an unrelated existing project.
@@ -24,6 +36,6 @@ Both tables use `user_id` tied to `auth.users`, unique keys scoped to the owner,
 ## Next implementation steps
 
 1. Run the migration in a dedicated development project and add database-level RLS tests for owner, non-owner, and anonymous access.
-2. Add a small cloud repository adapter behind the existing repository interfaces, without changing SQLite defaults.
+2. Wire this adapter behind the CLI/dashboard repository boundary, without changing SQLite defaults.
 3. Add integration tests for identity ownership and cross-user isolation.
 4. Add hosted sign-in only after the backend can verify identity and enforce per-user access end to end.
