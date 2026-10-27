@@ -1,4 +1,4 @@
-"""Tiny stdlib HTTP API for the local dashboard and future hosted adapters."""
+"""Tiny stdlib HTTP API for the local dashboard and hosted Vercel deployment."""
 
 from __future__ import annotations
 
@@ -6,13 +6,37 @@ import hmac
 import json
 import os
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+from agentproof.adapters import OpenAICompatibleAdapter, SimulatedAdapter
 from agentproof.analytics import group_by, overview, trends
 from agentproof.cloud_storage import SupabaseHostedStorage, SupabaseStorageError
+from agentproof.models import AssertionSpec, EvaluationSuite, TestCase
 from agentproof.regression import compare_runs
+from agentproof.runner import run_suite
 from agentproof.storage import RunRepository, SQLiteRunRepository
 from agentproof.trace_storage import SQLiteTraceRepository
+
+
+def _database_path() -> str:
+    """Use explicit storage when configured; serverless filesystems are not persistent."""
+    configured = os.environ.get("AGENTPROOF_DB")
+    if configured:
+        return configured
+    if os.environ.get("VERCEL"):
+        return "/tmp/agentproof.sqlite3"
+    return "agentproof.sqlite3"
+
+
+def _make_run_repository() -> RunRepository:
+    """Select SQLite by default or user-scoped hosted storage when explicitly enabled."""
+    storage_mode = os.environ.get("AGENTPROOF_STORAGE", "sqlite").lower()
+    if storage_mode == "sqlite":
+        return SQLiteRunRepository(_database_path())
+    if storage_mode == "supabase":
+        return SupabaseHostedStorage()
+    raise ValueError("AGENTPROOF_STORAGE must be 'sqlite' or 'supabase'.")
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -20,6 +44,19 @@ class Handler(BaseHTTPRequestHandler):
         body = json.dumps(payload, default=str).encode()
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _send_dashboard(self) -> None:
+        dashboard = Path(__file__).resolve().parent.parent / "apps" / "web" / "index.html"
+        try:
+            body = dashboard.read_bytes()
+        except OSError:
+            self._send({"error": "Dashboard asset is missing from this deployment."}, 500)
+            return
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
@@ -36,17 +73,14 @@ class Handler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         path = parsed.path.rstrip("/") or "/"
         q = parse_qs(parsed.query)
-        database = os.environ.get("AGENTPROOF_DB", "agentproof.sqlite3")
-        storage_mode = os.environ.get("AGENTPROOF_STORAGE", "sqlite").lower()
+
+        if path == "/":
+            self._send_dashboard()
+            return
+
+        database = _database_path()
+        repo = SQLiteRunRepository(database)
         try:
-            repo: RunRepository
-            if storage_mode == "supabase":
-                repo = SupabaseHostedStorage()
-            elif storage_mode == "sqlite":
-                repo = SQLiteRunRepository(database)
-            else:
-                self._send({"error": "AGENTPROOF_STORAGE must be 'sqlite' or 'supabase'."}, 500)
-                return
             if path == "/api/dashboard/overview":
                 self._send(overview(repo))
                 return
@@ -140,6 +174,100 @@ class Handler(BaseHTTPRequestHandler):
         except SupabaseStorageError as exc:
             self._send({"error": str(exc)}, 502)
         except (ValueError, TypeError) as exc:
+            self._send({"error": str(exc)}, 400)
+
+    def do_POST(self) -> None:
+        expected_token = os.environ.get("AGENTPROOF_API_TOKEN")
+        if expected_token:
+            authorization = self.headers.get("Authorization", "")
+            scheme, _, supplied_token = authorization.partition(" ")
+            if scheme.lower() != "bearer" or not supplied_token or not hmac.compare_digest(supplied_token, expected_token):
+                self._send({"error": "Unauthorized"}, 401)
+                return
+
+        path = urlparse(self.path).path.rstrip("/") or "/"
+        if path != "/api/runs":
+            self._send({"error": "Not found"}, 404)
+            return
+
+        try:
+            content_length = int(self.headers.get("Content-Length", "0"))
+            if content_length < 1 or content_length > 16384:
+                self._send({"error": "Request body must be between 1 and 16384 bytes."}, 413)
+                return
+            raw = json.loads(self.rfile.read(content_length))
+            if not isinstance(raw, dict):
+                raise ValueError("Suite must be a JSON object.")
+            provider = str(raw.get("provider", "simulated")).lower()
+            if provider not in {"simulated", "openrouter"}:
+                raise ValueError("Provider must be 'simulated' or 'openrouter'.")
+            api_key = os.environ.get("OPENROUTER_API_KEY") if provider == "openrouter" else None
+            if provider == "openrouter" and not api_key:
+                self._send({
+                    "error": "Live runs are not configured yet. Add OPENROUTER_API_KEY as a server-side Vercel environment secret, then redeploy."
+                }, 503)
+                return
+
+            tests_raw = raw.get("tests")
+            max_tests = 3 if provider == "openrouter" else 10
+            if not isinstance(tests_raw, list) or not 1 <= len(tests_raw) <= max_tests:
+                raise ValueError(f"Suite must contain between 1 and {max_tests} tests for this provider.")
+            tests = []
+            timeout_cap = 8.0 if provider == "openrouter" else 2.0
+            for item in tests_raw:
+                if not isinstance(item, dict):
+                    raise ValueError("Each test must be a JSON object.")
+                assertions_raw = item.get("assertions", [])
+                if not isinstance(assertions_raw, list) or not 1 <= len(assertions_raw) <= 10:
+                    raise ValueError("Each test must contain between 1 and 10 assertions.")
+                test_input = item.get("input")
+                if provider == "openrouter":
+                    if not isinstance(test_input, dict) or not (
+                        isinstance(test_input.get("prompt"), str)
+                        or isinstance(test_input.get("messages"), list)
+                    ):
+                        raise ValueError("Real-model tests need input.prompt or input.messages.")
+                    if isinstance(test_input.get("prompt"), str) and len(test_input["prompt"]) > 4000:
+                        raise ValueError("Each live prompt must be 4000 characters or fewer.")
+                tests.append(TestCase(
+                    id=item["id"],
+                    input=test_input,
+                    assertions=tuple(AssertionSpec(**assertion) for assertion in assertions_raw),
+                    category=item.get("category", "general"),
+                    timeout_seconds=min(float(item.get("timeout_seconds", timeout_cap)), timeout_cap),
+                    metadata=item.get("metadata", {}),
+                ))
+            suite = EvaluationSuite(
+                name=str(raw.get("name", "Browser evaluation"))[:120],
+                version=str(raw.get("version", "1.0"))[:40],
+                tests=tuple(tests),
+                schema_version=str(raw.get("schema_version", "1.0"))[:20],
+                scoring_weights=raw.get("scoring_weights", {}),
+                metadata=raw.get("metadata", {}),
+            )
+            if provider == "openrouter":
+                # Free router only: no user-controlled model name, base URL, or paid model calls.
+                adapter = OpenAICompatibleAdapter(
+                    model="openrouter/free",
+                    base_url="https://openrouter.ai/api/v1",
+                    api_key=api_key,
+                    request_timeout=8.0,
+                    max_tokens=128,
+                )
+                run = run_suite(
+                    suite, adapter,
+                    {"provider": "openrouter", "model": "openrouter/free", "mode": "live"},
+                )
+                model = "openrouter/free"
+            else:
+                run = run_suite(suite, SimulatedAdapter(), {"mode": "simulated"})
+                model = "synthetic"
+            repo = _make_run_repository()
+            repo.save_run(run, provider=provider, model=model)
+            self._send(run.to_dict(), 201)
+        except SupabaseStorageError as exc:
+            self._send({"error": str(exc)}, 502)
+        except (json.JSONDecodeError, KeyError, TypeError, ValueError, OverflowError) as exc:
             self._send({"error": str(exc)}, 400)
 
     def log_message(self, format: str, *args: object) -> None:
