@@ -27,6 +27,7 @@ class OpenAICompatibleAdapter(AgentAdapter):
         api_key_env: str = "OPENAI_API_KEY",
         request_timeout: float = 30.0,
         temperature: float = 0.0,
+        max_tokens: int = 256,
     ) -> None:
         if not model.strip():
             raise ValueError("Model name must not be empty")
@@ -38,6 +39,9 @@ class OpenAICompatibleAdapter(AgentAdapter):
         self.base_url = base_url.rstrip("/")
         self.request_timeout = request_timeout
         self.temperature = temperature
+        if not 1 <= max_tokens <= 2048:
+            raise ValueError("max_tokens must be between 1 and 2048")
+        self.max_tokens = max_tokens
         self._api_key = api_key or os.environ.get(api_key_env)
         if not self._api_key:
             raise ValueError(
@@ -52,6 +56,7 @@ class OpenAICompatibleAdapter(AgentAdapter):
                 "model": self.model,
                 "messages": messages,
                 "temperature": self.temperature,
+                "max_tokens": self.max_tokens,
             },
             ensure_ascii=False,
         ).encode("utf-8")
