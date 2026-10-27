@@ -14,7 +14,7 @@
 - Local JSON HTTP API.
 - Data-backed dashboard with Overview, Evaluations, Test Suites, Regression, Analytics, Models and Settings sections.
 
-## Phase 4A — trace evaluation primitives (in progress)
+## Phase 4A — trace evaluation primitives (complete)
 - Deterministic checks for tool presence/absence and call counts.
 - Ordered tool-call sequence checks.
 - Nested tool-argument comparisons.
@@ -22,7 +22,7 @@
 - Per-check evidence and explicit limitations.
 - Next: connect trace capture to an agent execution adapter and persist traces alongside run results.
 
-## Phase 4B — production platform
+## Phase 5 — production platform
 - Hosted Postgres/Supabase persistence.
 - Authentication, organizations and project permissions.
 - Async evaluation jobs and durable workers.
