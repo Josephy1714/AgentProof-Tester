@@ -10,6 +10,7 @@ from urllib.parse import parse_qs, urlparse
 from agentproof.analytics import group_by, overview, trends
 from agentproof.regression import compare_runs
 from agentproof.storage import SQLiteRunRepository
+from agentproof.trace_storage import SQLiteTraceRepository
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -25,13 +26,14 @@ class Handler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         path = parsed.path.rstrip("/") or "/"
         q = parse_qs(parsed.query)
-        repo = SQLiteRunRepository(os.environ.get("AGENTPROOF_DB", "agentproof.sqlite3"))
+        database = os.environ.get("AGENTPROOF_DB", "agentproof.sqlite3")
+        repo = SQLiteRunRepository(database)
         try:
             if path == "/api/dashboard/overview":
                 self._send(overview(repo))
                 return
             if path == "/api/analytics/trends":
-                self._send({"data": trends(repo, int(q.get("limit", [50])[0]))})
+                self._send({"data": trends(repo, int(q.get("limit", ["50"])[0]))})
                 return
             if path == "/api/analytics/models":
                 self._send({"data": group_by(repo, "model")})
@@ -42,12 +44,32 @@ class Handler(BaseHTTPRequestHandler):
             if path == "/api/runs":
                 self._send({
                     "data": repo.list_runs(
-                        int(q.get("limit", [50])[0]),
-                        int(q.get("offset", [0])[0]),
+                        int(q.get("limit", ["50"])[0]),
+                        int(q.get("offset", ["0"])[0]),
                         q.get("suite", [None])[0],
                         q.get("model", [None])[0],
                     )
                 })
+                return
+            if path == "/api/traces":
+                trace_repo = SQLiteTraceRepository(database)
+                self._send({
+                    "data": trace_repo.list_evaluations(
+                        int(q.get("limit", ["20"])[0]),
+                        int(q.get("offset", ["0"])[0]),
+                    )
+                })
+                return
+            if path.startswith("/api/traces/"):
+                trace_id = path.removeprefix("/api/traces/")
+                if not trace_id or "/" in trace_id:
+                    self._send({"error": "Trace evaluation not found"}, 404)
+                    return
+                evaluation = SQLiteTraceRepository(database).get_evaluation(trace_id)
+                if evaluation is None:
+                    self._send({"error": "Trace evaluation not found"}, 404)
+                else:
+                    self._send(evaluation)
                 return
             if path.startswith("/api/runs/"):
                 parts = path.split("/")
