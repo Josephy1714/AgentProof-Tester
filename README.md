@@ -41,7 +41,7 @@ Windows PowerShell:
 
 ```powershell
 py -3.12 -m venv .venv
-.venv\Scripts\Activate.ps1
+.venv\\Scripts\\Activate.ps1
 python -m pip install -e . -r requirements-dev.txt
 pytest
 python -m agentproof.cli run examples/basic_suite.json
@@ -61,7 +61,7 @@ python -m agentproof.cli run-show <run-id>
 
 Use `AGENTPROOF_DB` or `--db` to select another local database path. SQLite files are ignored by git.
 
-## Recorded trace evaluation
+## Recorded trace evaluation and history
 
 The trace evaluator checks a sequence of structured events and returns per-check evidence. It does not require a model call when evaluating fixtures.
 
@@ -76,7 +76,47 @@ Trace history API endpoints:
 - `/api/traces` — recent trace-evaluation summaries
 - `/api/traces/<trace-id>` — full trace, checks and per-check results
 
-See [Trace evaluation](docs/traces.md) for event format, supported checks, history behavior, and the live tool-execution Python API. Live trace capture is not yet a CLI command or a dashboard view.
+See [Trace evaluation](docs/traces.md) for event format, supported checks, history behavior, and the live tool-execution Python API.
+
+## Live tool execution and evaluation
+
+The Python API can capture a bounded tool-calling conversation and evaluate the captured trace in one call:
+
+```python
+from agentproof.tool_evaluation import run_and_evaluate_tool_agent
+
+report = run_and_evaluate_tool_agent(
+    messages=[{"role": "user", "content": "Look up the weather in Nairobi."}],
+    tools=[{
+        "type": "function",
+        "function": {
+            "name": "lookup_weather",
+            "description": "Look up weather for a city",
+            "parameters": {
+                "type": "object",
+                "properties": {"city": {"type": "string"}},
+                "required": ["city"],
+            },
+        },
+    }],
+    handlers={
+        "lookup_weather": lambda args: {
+            "city": args["city"],
+            "forecast": "sunny",
+        }
+    },
+    checks=[
+        {"type": "tool_called", "name": "lookup_weather"},
+        {"type": "final_answer_contains", "value": "sunny"},
+    ],
+    model="your-tool-capable-model",
+)
+print(report["passed"], report["evaluation"]["results"])
+```
+
+Set `OPENAI_API_KEY` in the environment, or pass `api_key` explicitly. Configure `base_url` for another OpenAI-compatible gateway. The run is bounded by `max_turns` (default 8); reaching the limit makes the overall report fail even if checks on the partial trace pass. The report includes the captured trace, per-check evidence, model usage and completion status. Live tool execution is currently a Python API, not a CLI command or dashboard view.
+
+**Security:** registered handlers run as ordinary Python functions in your process, not in a sandbox. Only register trusted handlers, validate arguments inside them, and avoid exposing privileged capabilities unless intentionally required. Live provider requests may incur charges. API keys are not included in returned reports.
 
 ## Live provider evaluation
 
@@ -116,7 +156,7 @@ Adapters -> Evaluation Runner -> EvaluationRun -> RunRepository -> SQLite
                                              |          |
                                              v          v
                                          Regression  Analytics
-                                             \          /
+                                             \\          /
                                               HTTP API
                                                  |
                                             Web Dashboard
@@ -142,7 +182,7 @@ Keep provider keys in environment variables. Evaluation inputs, traces and outpu
 
 ## Roadmap
 
-See `docs/roadmap.md`. Next priorities are dashboard trace exploration, integration of live tool runs with trace evaluation, hosted persistence, authentication, async jobs, scheduling and production deployment.
+See [`docs/roadmap.md`](docs/roadmap.md). Next priorities are dashboard trace exploration, hosted persistence, authentication, async jobs, scheduling and production deployment.
 
 ## License
 
