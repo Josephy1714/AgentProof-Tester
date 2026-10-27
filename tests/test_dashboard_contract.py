@@ -27,7 +27,10 @@ def test_new_evaluation_and_settings_controls_are_wired() -> None:
     assert "function openPage(page)" in html
     assert "function checkApiHealth()" in html
     assert "function savePreferences()" in html
-    assert "function submitBrowserRun()" in html
+    assert "function submitBrowserRun(provider=" in html
+    assert "function loadRealAiExample()" in html
+    assert "runLiveSuiteButton" in html
+    assert "openrouter/free" in html
     assert "function resetSuiteExample()" in html
     assert "function loadFailingExample()" in html
     assert "function downloadSuite()" in html
