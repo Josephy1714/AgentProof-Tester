@@ -20,6 +20,7 @@
 - Dashboard sections: Overview, Evaluations, Test Suites, Regression, Analytics, Models and Settings.
 - Responsive charts, run detail inspection, empty states and data-backed KPIs.
 - Deterministic recorded-trace checks for tool presence/absence, call counts, ordered tool sequences, nested arguments, tool results and final-answer text.
+- Bounded OpenAI-compatible function-tool execution with caller-registered handlers and normalized trace capture.
 - Tests and CI with Ruff, mypy and pytest.
 
 ## Quick start
