@@ -14,19 +14,24 @@
 - Local JSON HTTP API.
 - Data-backed dashboard with Overview, Evaluations, Test Suites, Regression, Analytics, Models and Settings sections.
 
-## Phase 4A — trace evaluation primitives (in progress)
+## Phase 4A — trace evaluation primitives (complete)
 - Deterministic checks for tool presence/absence and call counts.
 - Ordered tool-call sequence checks.
 - Nested tool-argument comparisons.
 - Tool-result and final-answer checks.
 - Per-check evidence and explicit limitations.
-- Next: connect trace capture to an agent execution adapter and persist traces alongside run results.
+- JSON fixture CLI with CI-friendly exit codes and per-check reports.
 
-## Phase 4B — production platform
+## Phase 4B — trace integration (next)
+- Capture tool-call traces from a real agent execution adapter.
+- Persist trace events and check results alongside evaluation runs.
+- Expose trace evidence through the API and dashboard.
+
+## Phase 5 — production platform
 - Hosted Postgres/Supabase persistence.
 - Authentication, organizations and project permissions.
 - Async evaluation jobs and durable workers.
 - Provider/agent trace capture, trajectory evaluation and safety suites.
 - Scheduling, notifications, report sharing and production deployment.
 
-AgentProof does not claim Phase 4B capabilities until they are implemented and tested.
+AgentProof does not claim Phase 4B or Phase 5 capabilities until they are implemented and tested.

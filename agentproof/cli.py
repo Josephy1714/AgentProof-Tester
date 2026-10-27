@@ -1,4 +1,4 @@
-"""CLI for running evaluations and inspecting local history."""
+"""CLI for running evaluations, trace checks, and inspecting local history."""
 
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ from agentproof.adapters import AgentAdapter, OpenAICompatibleAdapter, Simulated
 from agentproof.models import AssertionSpec, EvaluationSuite, TestCase
 from agentproof.runner import run_suite, write_json_report
 from agentproof.storage import SQLiteRunRepository
+from agentproof.traces import evaluate_trace
 
 
 def load_suite(path: str) -> EvaluationSuite:
@@ -38,10 +39,26 @@ def load_suite(path: str) -> EvaluationSuite:
     )
 
 
+def load_trace_fixture(path: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Load a trace fixture with 'trace' and 'checks' arrays."""
+    raw: Any = json.loads(Path(path).read_text(encoding="utf-8"))
+    if not isinstance(raw, dict):
+        raise ValueError("Trace fixture must be a JSON object")
+    events = raw.get("trace")
+    checks = raw.get("checks")
+    if not isinstance(events, list) or not all(isinstance(item, dict) for item in events):
+        raise ValueError("Trace fixture 'trace' must be an array of JSON objects")
+    if not isinstance(checks, list) or not all(isinstance(item, dict) for item in checks):
+        raise ValueError("Trace fixture 'checks' must be an array of JSON objects")
+    return events, checks
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="agentproof")
-    p.add_argument("command", choices=["run", "runs", "run-show"])
-    p.add_argument("suite", nargs="?")
+    p.add_argument("command", choices=["run", "runs", "run-show", "trace-eval"])
+    p.add_argument(
+        "suite", nargs="?", help="Suite path, run ID, or trace fixture path depending on command"
+    )
     p.add_argument("--report", default="agentproof-report.json")
     p.add_argument("--db", default="agentproof.sqlite3")
     p.add_argument("--limit", type=int, default=20)
@@ -53,8 +70,28 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--api-key-env", default="OPENAI_API_KEY")
     p.add_argument("--request-timeout", type=float, default=30.0)
     args = p.parse_args(argv)
-    repo = SQLiteRunRepository(args.db)
 
+    if args.command == "trace-eval":
+        if not args.suite:
+            p.error("trace-eval requires a trace fixture path")
+        try:
+            events, checks = load_trace_fixture(args.suite)
+            report = evaluate_trace(events, checks)
+            Path(args.report).write_text(
+                json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+            )
+        except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
+            print(f"AgentProof error: {exc}", file=sys.stderr)
+            return 2
+        print(
+            f"Trace evaluation: {'PASS' if report['passed'] else 'FAIL'}\n"
+            f"Score: {report['score']:.1%}\n"
+            f"Checks: {report['summary']}\n"
+            f"Report: {args.report}"
+        )
+        return 0 if report["passed"] else 1
+
+    repo = SQLiteRunRepository(args.db)
     if args.command == "runs":
         print(json.dumps(repo.list_runs(args.limit), indent=2, default=str))
         return 0
