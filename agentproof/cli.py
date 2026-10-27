@@ -14,6 +14,7 @@ from agentproof.models import AssertionSpec, EvaluationSuite, TestCase
 from agentproof.runner import run_suite, write_json_report
 from agentproof.storage import SQLiteRunRepository
 from agentproof.traces import evaluate_trace
+from agentproof.trace_storage import SQLiteTraceRunRepository
 
 
 def load_suite(path: str) -> EvaluationSuite:
@@ -55,7 +56,7 @@ def load_trace_fixture(path: str) -> tuple[list[dict[str, Any]], list[dict[str, 
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="agentproof")
-    p.add_argument("command", choices=["run", "runs", "run-show", "trace-eval"])
+    p.add_argument("command", choices=["run", "runs", "run-show", "trace-eval", "trace-runs", "trace-show"])
     p.add_argument(
         "suite", nargs="?", help="Suite path, run ID, or trace fixture path depending on command"
     )
@@ -80,6 +81,9 @@ def main(argv: list[str] | None = None) -> int:
             Path(args.report).write_text(
                 json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
             )
+            trace_run_id = SQLiteTraceRunRepository(args.db).save(
+                events, checks, report, fixture_name=Path(args.suite).name
+            )
         except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
             print(f"AgentProof error: {exc}", file=sys.stderr)
             return 2
@@ -87,9 +91,33 @@ def main(argv: list[str] | None = None) -> int:
             f"Trace evaluation: {'PASS' if report['passed'] else 'FAIL'}\n"
             f"Score: {report['score']:.1%}\n"
             f"Checks: {report['summary']}\n"
-            f"Report: {args.report}"
+            f"Report: {args.report}\n"
+            f"Trace history ID: {trace_run_id}\n"
+            f"History: {args.db}"
         )
         return 0 if report["passed"] else 1
+
+    if args.command == "trace-runs":
+        try:
+            trace_repo = SQLiteTraceRunRepository(args.db)
+            print(json.dumps(trace_repo.list_runs(args.limit), indent=2))
+        except (OSError, ValueError, RuntimeError) as exc:
+            print(f"AgentProof error: {exc}", file=sys.stderr)
+            return 2
+        return 0
+    if args.command == "trace-show":
+        if not args.suite:
+            p.error("trace-show requires a trace history ID")
+        try:
+            trace_run = SQLiteTraceRunRepository(args.db).get_run(args.suite)
+        except (OSError, ValueError, RuntimeError) as exc:
+            print(f"AgentProof error: {exc}", file=sys.stderr)
+            return 2
+        if not trace_run:
+            print("Trace run not found", file=sys.stderr)
+            return 2
+        print(json.dumps(trace_run, indent=2, ensure_ascii=False))
+        return 0
 
     repo = SQLiteRunRepository(args.db)
     if args.command == "runs":
