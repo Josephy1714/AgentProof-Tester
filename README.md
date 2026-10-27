@@ -21,7 +21,7 @@
 - Responsive charts, run detail inspection, empty states and data-backed KPIs.
 - Deterministic recorded-trace checks for tool presence/absence, call counts, ordered tool sequences, nested arguments, tool results and final-answer text.
 - Bounded OpenAI-compatible function-tool execution with caller-registered handlers and normalized trace capture.
-- SQLite persistence for trace evaluation inputs and per-check evidence, with API endpoints for trace history.
+- SQLite persistence for trace-evaluation inputs, check definitions, summaries and per-check evidence, with API endpoints for trace history.
 - Tests and CI with Ruff, mypy and pytest.
 
 ## Quick start
@@ -41,14 +41,14 @@ Windows PowerShell:
 
 ```powershell
 py -3.12 -m venv .venv
-.venv\\Scripts\\Activate.ps1
+.venv\Scripts\Activate.ps1
 python -m pip install -e . -r requirements-dev.txt
 pytest
 python -m agentproof.cli run examples/basic_suite.json
 python -m agentproof.api
 ```
 
-Open `apps/web/index.html` through the repository's web hosting or local static server while the API is running. The dashboard reads real API data; it does not contain fabricated KPI values.
+Open `apps/web/index.html` through the repository's web hosting or a local static server while the API is running. The dashboard reads real API data; it does not contain fabricated KPI values.
 
 ## Run history
 
@@ -63,20 +63,20 @@ Use `AGENTPROOF_DB` or `--db` to select another local database path. SQLite file
 
 ## Recorded trace evaluation and history
 
-The trace evaluator checks a sequence of structured events and returns per-check evidence. It does not require a model call when evaluating fixtures.
+The trace evaluator checks an ordered sequence of structured events and returns per-check evidence. Evaluating a recorded fixture does not require a model call:
 
 ```bash
 python -m agentproof.cli trace-eval examples/trace_fixture.json --report trace-report.json
 ```
 
-By default, the command writes the JSON report and stores the trace, checks, and evidence in the local SQLite history. Use `--no-history` to avoid storing trace payloads. Exit codes are 0 for all checks passing, 1 for valid checks failing, and 2 for invalid input or runtime errors.
+By default, the command writes the JSON report and stores the trace, check definitions, summary and evidence in the local SQLite history. Use `--no-history` to avoid storing trace payloads. Exit codes are 0 when all checks pass, 1 when valid checks fail, and 2 for invalid input or runtime errors.
 
 Trace history API endpoints:
 
-- `/api/traces` — recent trace-evaluation summaries
-- `/api/traces/<trace-id>` — full trace, checks and per-check results
+- `GET /api/traces?limit=20&offset=0` — bounded summary listing without full trace payloads.
+- `GET /api/traces/<trace-id>` — full trace, check definitions and per-check evidence.
 
-See [Trace evaluation](docs/traces.md) for event format, supported checks, history behavior, and the live tool-execution Python API.
+See [Trace evaluation](docs/traces.md) for the event format, supported checks, persistence behavior, API details and live tool-execution Python API.
 
 ## Live tool execution and evaluation
 
@@ -156,7 +156,7 @@ Adapters -> Evaluation Runner -> EvaluationRun -> RunRepository -> SQLite
                                              |          |
                                              v          v
                                          Regression  Analytics
-                                             \\          /
+                                             \          /
                                               HTTP API
                                                  |
                                             Web Dashboard
