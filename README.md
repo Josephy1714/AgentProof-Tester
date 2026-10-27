@@ -79,7 +79,13 @@ report = evaluate_trace(trace, [
 ])
 ```
 
-See [Trace evaluation](docs/traces.md) for the event schema and supported checks. The example fixture at `examples/trace_fixture.json` is illustrative and is not run by the standard suite runner.
+See [Trace evaluation](docs/traces.md) for the event schema and supported checks. Evaluate a JSON fixture directly from the CLI:
+
+```bash
+python -m agentproof.cli trace-eval examples/trace_fixture.json --report trace-report.json
+```
+
+The command exits with code 0 when all checks pass, 1 when valid checks fail, and 2 for invalid input or runtime errors. It writes per-check evidence to the report. It does not call a model, execute tools, or create a run-history database entry.
 
 ## Live provider evaluation
 
