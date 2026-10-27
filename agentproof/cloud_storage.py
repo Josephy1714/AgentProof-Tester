@@ -164,7 +164,6 @@ class SupabaseHostedStorage:
                 "started_at": row.get("started_at") or payload.get("started_at", ""),
                 "created_at": row.get("created_at") or row.get("started_at") or payload.get("started_at", ""),
                 "summary": payload.get("summary", {}),
-                "payload": payload,
             })
         return normalized
 
