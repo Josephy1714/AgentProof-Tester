@@ -151,7 +151,7 @@ The existing dashboard includes KPI cards, score trends, test-health visualizati
 
 ## Hosted storage foundation
 
-A proposed Supabase schema with per-user row-level security is documented in [Hosted storage foundation](docs/cloud-storage.md). It is a reviewed starting point only: it has **not** been deployed, and the app does not yet connect to Supabase. Local SQLite remains the default.
+A versioned Supabase migration and readable schema snapshot with per-user row-level security are documented in [Hosted storage foundation](docs/cloud-storage.md). They have **not** been applied to a live database, and the app does not yet connect to Supabase. Local SQLite remains the default.
 
 ## Architecture
 
