@@ -46,6 +46,36 @@ python -m agentproof.cli trace-eval examples/trace_fixture.json --report trace-r
 
 The fixture JSON uses top-level `trace` and `checks` arrays. The report is written as JSON and contains the same pass/score/summary/per-check evidence returned by `evaluate_trace`. Exit codes are CI-friendly: `0` means every check passed, `1` means at least one valid check failed, and `2` means the fixture or check definitions were invalid or unreadable. This command does not create a model evaluation run or modify run history.
 
+## Capturing traces from a live tool-calling conversation
+
+`agentproof.tool_execution.run_tool_agent` makes bounded Chat Completions requests with function tools, executes only explicitly registered Python handlers, and returns the final answer plus ordered `tool_call`, `tool_result`, and `assistant_message` events. It accepts OpenAI-compatible tool schemas and a mapping of tool names to Python callables. Set the provider key in the environment (default `OPENAI_API_KEY`) or pass `api_key` explicitly.
+
+Example outline:
+
+~~~python
+from agentproof.tool_execution import run_tool_agent
+
+result = run_tool_agent(
+    [{"role": "user", "content": "Look up the weather in Nairobi."}],
+    [{"type": "function", "function": {
+        "name": "lookup_weather",
+        "description": "Look up weather for a city",
+        "parameters": {
+            "type": "object",
+            "properties": {"city": {"type": "string"}},
+            "required": ["city"],
+        },
+    }}],
+    {"lookup_weather": lambda args: {"city": args["city"], "forecast": "sunny"}},
+    model="your-tool-capable-model",
+)
+trace = result["trace"]
+~~~
+
+The loop is bounded by `max_turns` (default 8). If the limit is reached, `completed` is false and `stop_reason` is `max_turns`. Handler exceptions are captured as tool-result errors and returned to the model for possible recovery. The function does not persist traces or automatically run trace assertions; callers can pass `result["trace"]` to `evaluate_trace`.
+
+**Security:** registered handlers run as ordinary Python functions in your process, not in a sandbox. Only register tools you trust, validate arguments inside handlers, and avoid exposing filesystem, shell, network, or other privileged capabilities unless intentionally required. Provider requests may incur charges.
+
 ## Current boundary
 
 This module evaluates traces supplied by the caller. The existing OpenAI-compatible adapter currently performs a single chat-completion request and does not capture or execute tool calls. Live trace capture, persistence, API endpoints, dashboard trace exploration, and model-specific tool execution remain future work. Do not treat these checks as a complete prompt-injection or safety evaluation system.
