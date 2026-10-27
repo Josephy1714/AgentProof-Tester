@@ -2,7 +2,7 @@
 
 **An evaluation and regression-testing platform foundation for AI agents.** AgentProof helps developers run reproducible suites, inspect evidence, compare versions, and track quality over time.
 
-> **Current status:** evaluation engine + deterministic simulated adapter + opt-in OpenAI-compatible adapter + SQLite run history + regression analytics + local dashboard API + data-backed dashboard + deterministic trace checks + bounded live tool-call trace capture + trace evaluation history/API. Hosted auth, cloud persistence and distributed jobs are future work.
+> **Current status:** evaluation engine + deterministic simulated adapter + opt-in OpenAI-compatible adapter + SQLite run history + regression analytics + local dashboard API + data-backed dashboard + deterministic trace checks + bounded live tool-call trace capture + trace evaluation history/API + initial hosted-storage schema proposal. Hosted auth, cloud repository integration and distributed jobs remain future work.
 
 ## Implemented
 
@@ -148,6 +148,10 @@ Endpoints include:
 - `/api/traces/<trace-id>`
 
 The existing dashboard includes KPI cards, score trends, test-health visualization, recent runs, run-level evidence, regression summaries, model/suite analytics, and responsive empty/error states. Trace history is available in the dashboard's **Agent Traces** section, including pass/fail filtering, scores, timestamps, per-check evidence, and expandable captured event details. The local API binds to loopback by default and supports optional bearer-token protection via `AGENTPROOF_API_TOKEN`; see `docs/traces.md` for limitations and setup.
+
+## Hosted storage foundation
+
+A versioned Supabase migration and readable schema snapshot with per-user row-level security are documented in [Hosted storage foundation](docs/cloud-storage.md). They have **not** been applied to a live database, and the app does not yet connect to Supabase. Local SQLite remains the default.
 
 ## Architecture
 
