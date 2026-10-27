@@ -33,3 +33,15 @@ def test_new_evaluation_and_settings_controls_are_wired() -> None:
     assert "function downloadSuite()" in html
     assert "function importSuiteFile(event)" in html
     assert "function downloadRunReport(id)" in html
+
+
+
+def test_benchmark_and_browser_history_controls_are_wired() -> None:
+    html = (Path(__file__).parents[1] / "apps" / "web" / "index.html").read_text(encoding="utf-8")
+    assert 'onclick="loadBenchmarkTemplate(\'robustness\')"' in html
+    assert 'onclick="loadBenchmarkTemplate(\'json\')"' in html
+    assert 'onclick="loadBenchmarkTemplate(\'safety\')"' in html
+    assert 'onclick="compareRouterRuns()"' in html
+    assert "function rememberRun(run)" in html
+    assert "function mergeRunHistory(serverRows)" in html
+    assert "function downloadLastComparison()" in html
