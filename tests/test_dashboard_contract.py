@@ -6,7 +6,7 @@ from pathlib import Path
 
 def test_every_dashboard_navigation_target_exists() -> None:
     html = (Path(__file__).parents[1] / "apps" / "web" / "index.html").read_text(encoding="utf-8")
-    targets = set(re.findall(r'data-page="([^"]+)"', html))
+    targets = set(re.findall(r'<button class="nav[^"]*" data-page="([^"]+)"', html))
     sections = set(re.findall(r'<section id="([^"]+)" class="page', html))
     assert targets
     assert targets <= sections
