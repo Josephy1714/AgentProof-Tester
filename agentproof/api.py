@@ -37,8 +37,15 @@ class Handler(BaseHTTPRequestHandler):
         path = parsed.path.rstrip("/") or "/"
         q = parse_qs(parsed.query)
         database = os.environ.get("AGENTPROOF_DB", "agentproof.sqlite3")
-        repo = SQLiteRunRepository(database)
+        storage_mode = os.environ.get("AGENTPROOF_STORAGE", "sqlite").lower()
         try:
+            if storage_mode == "supabase":
+                repo = SupabaseHostedStorage()
+            elif storage_mode == "sqlite":
+                repo = SQLiteRunRepository(database)
+            else:
+                self._send({"error": "AGENTPROOF_STORAGE must be 'sqlite' or 'supabase'."}, 500)
+                return
             if path == "/api/dashboard/overview":
                 self._send(overview(repo))
                 return
