@@ -29,3 +29,7 @@ def test_new_evaluation_and_settings_controls_are_wired() -> None:
     assert "function savePreferences()" in html
     assert "function submitBrowserRun()" in html
     assert "function resetSuiteExample()" in html
+    assert "function loadFailingExample()" in html
+    assert "function downloadSuite()" in html
+    assert "function importSuiteFile(event)" in html
+    assert "function downloadRunReport(id)" in html
