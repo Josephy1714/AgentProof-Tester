@@ -11,7 +11,7 @@ from urllib.parse import parse_qs, urlparse
 from agentproof.analytics import group_by, overview, trends
 from agentproof.cloud_storage import SupabaseHostedStorage, SupabaseStorageError
 from agentproof.regression import compare_runs
-from agentproof.storage import SQLiteRunRepository
+from agentproof.storage import RunRepository, SQLiteRunRepository
 from agentproof.trace_storage import SQLiteTraceRepository
 
 
@@ -39,6 +39,7 @@ class Handler(BaseHTTPRequestHandler):
         database = os.environ.get("AGENTPROOF_DB", "agentproof.sqlite3")
         storage_mode = os.environ.get("AGENTPROOF_STORAGE", "sqlite").lower()
         try:
+            repo: RunRepository
             if storage_mode == "supabase":
                 repo = SupabaseHostedStorage()
             elif storage_mode == "sqlite":
