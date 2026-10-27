@@ -13,7 +13,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode, urlparse
 from urllib.request import Request, urlopen
 
-from agentproof.models import EvaluationRun
+from agentproof.models import AssertionResult, EvaluationRun, TestResult, TestStatus
 
 
 class SupabaseStorageError(RuntimeError):
@@ -151,9 +151,57 @@ class SupabaseHostedStorage:
         rows = self._request(f"/rest/v1/{self.RUNS}", query=query)
         if not isinstance(rows, list):
             raise SupabaseStorageError("Unexpected evaluation history response.")
-        return rows
+        normalized: list[dict[str, Any]] = []
+        for row in rows:
+            payload = row.get("payload") or {}
+            normalized.append({
+                "run_id": row.get("run_key"),
+                "suite_name": row.get("suite_name") or payload.get("suite_name", ""),
+                "suite_version": row.get("suite_version") or payload.get("suite_version", ""),
+                "provider": row.get("provider"),
+                "model": row.get("model"),
+                "score": row.get("score", payload.get("score", 0.0)),
+                "started_at": row.get("started_at") or payload.get("started_at", ""),
+                "created_at": row.get("created_at") or row.get("started_at") or payload.get("started_at", ""),
+                "summary": payload.get("summary", {}),
+            })
+        return normalized
 
-    def get_run(self, run_key: str) -> dict[str, Any] | None:
+    @staticmethod
+    def _payload_to_run(payload: dict[str, Any]) -> EvaluationRun:
+        """Rebuild the typed run contract from a stored JSON payload."""
+        results = []
+        for item in payload.get("results", []):
+            assertions = tuple(
+                AssertionResult(**assertion)
+                for assertion in item.get("assertion_results", [])
+            )
+            results.append(TestResult(
+                test_id=item["test_id"],
+                status=TestStatus(item["status"]),
+                score=float(item.get("score", 0.0)),
+                duration_ms=float(item.get("duration_ms", 0.0)),
+                assertion_results=assertions,
+                output=item.get("output"),
+                error_type=item.get("error_type"),
+                error_message=item.get("error_message"),
+                category=item.get("category", "general"),
+            ))
+        return EvaluationRun(
+            run_id=payload["run_id"],
+            suite_name=payload["suite_name"],
+            suite_version=payload["suite_version"],
+            config_fingerprint=payload["config_fingerprint"],
+            adapter_name=payload["adapter_name"],
+            simulated=bool(payload.get("simulated", False)),
+            started_at=payload["started_at"],
+            duration_ms=float(payload.get("duration_ms", 0.0)),
+            results=tuple(results),
+            score=float(payload.get("score", 0.0)),
+            summary=payload.get("summary", {}),
+        )
+
+    def get_run(self, run_key: str) -> EvaluationRun | None:
         rows = self._request(
             f"/rest/v1/{self.RUNS}",
             query={
@@ -165,7 +213,50 @@ class SupabaseHostedStorage:
         )
         if not isinstance(rows, list):
             raise SupabaseStorageError("Unexpected evaluation detail response.")
-        return rows[0]["payload"] if rows else None
+        return self._payload_to_run(rows[0]["payload"]) if rows else None
+
+    def get_test_results(self, run_id: str) -> list[dict[str, Any]]:
+        run = self.get_run(run_id)
+        if run is None:
+            return []
+        return [
+            {
+                "test_id": result.test_id,
+                "status": result.status.value,
+                "score": result.score,
+                "duration_ms": result.duration_ms,
+                "assertions": [
+                    {
+                        "assertion_type": assertion.assertion_type,
+                        "passed": assertion.passed,
+                        "message": assertion.message,
+                        "expected": assertion.expected,
+                        "actual": assertion.actual,
+                    }
+                    for assertion in result.assertion_results
+                ],
+                "output": result.output,
+                "error_type": result.error_type,
+                "error_message": result.error_message,
+                "category": result.category,
+            }
+            for result in run.results
+        ]
+
+    def latest(self, suite: str | None = None) -> EvaluationRun | None:
+        rows = self.list_runs(limit=200, suite=suite)
+        return self.get_run(rows[0]["run_id"]) if rows else None
+
+    def previous(self, run_id: str, suite: str | None = None) -> EvaluationRun | None:
+        current = self.get_run(run_id)
+        if current is None:
+            return None
+        rows = self.list_runs(limit=200, suite=suite or current.suite_name)
+        previous_row = next(
+            (row for row in rows if row["started_at"] < current.started_at),
+            None,
+        )
+        return self.get_run(previous_row["run_id"]) if previous_row else None
 
     def save_trace_evaluation(
         self,

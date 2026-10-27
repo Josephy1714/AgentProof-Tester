@@ -15,7 +15,7 @@ from agentproof.cloud_storage import SupabaseHostedStorage, SupabaseStorageError
 from agentproof.models import AssertionSpec, EvaluationSuite, TestCase
 from agentproof.regression import compare_runs
 from agentproof.runner import run_suite
-from agentproof.storage import SQLiteRunRepository
+from agentproof.storage import RunRepository, SQLiteRunRepository
 from agentproof.trace_storage import SQLiteTraceRepository
 
 
@@ -27,6 +27,16 @@ def _database_path() -> str:
     if os.environ.get("VERCEL"):
         return "/tmp/agentproof.sqlite3"
     return "agentproof.sqlite3"
+
+
+def _make_run_repository() -> RunRepository:
+    """Select SQLite by default or user-scoped hosted storage when explicitly enabled."""
+    storage_mode = os.environ.get("AGENTPROOF_STORAGE", "sqlite").lower()
+    if storage_mode == "sqlite":
+        return SQLiteRunRepository(_database_path())
+    if storage_mode == "supabase":
+        return SupabaseHostedStorage()
+    raise ValueError("AGENTPROOF_STORAGE must be 'sqlite' or 'supabase'.")
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -252,9 +262,11 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 run = run_suite(suite, SimulatedAdapter(), {"mode": "simulated"})
                 model = "synthetic"
-            repo = SQLiteRunRepository(_database_path())
+            repo = _make_run_repository()
             repo.save_run(run, provider=provider, model=model)
             self._send(run.to_dict(), 201)
+        except SupabaseStorageError as exc:
+            self._send({"error": str(exc)}, 502)
         except (json.JSONDecodeError, KeyError, TypeError, ValueError, OverflowError) as exc:
             self._send({"error": str(exc)}, 400)
 
