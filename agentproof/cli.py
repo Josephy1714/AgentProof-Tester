@@ -1,4 +1,4 @@
-"""CLI for running evaluations and inspecting local history."""
+"""CLI for running evaluations, trace checks, and inspecting local history."""
 
 from __future__ import annotations
 
@@ -13,6 +13,7 @@ from agentproof.adapters import AgentAdapter, OpenAICompatibleAdapter, Simulated
 from agentproof.models import AssertionSpec, EvaluationSuite, TestCase
 from agentproof.runner import run_suite, write_json_report
 from agentproof.storage import SQLiteRunRepository
+from agentproof.traces import evaluate_trace
 
 
 def load_suite(path: str) -> EvaluationSuite:
@@ -38,9 +39,23 @@ def load_suite(path: str) -> EvaluationSuite:
     )
 
 
+def load_trace_case(path: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Load a trace-evaluation document with trace events and check definitions."""
+    raw = json.loads(Path(path).read_text(encoding="utf-8"))
+    if not isinstance(raw, dict):
+        raise ValueError("Trace evaluation document must be a JSON object")
+    trace = raw.get("trace")
+    checks = raw.get("checks")
+    if not isinstance(trace, list) or any(not isinstance(item, dict) for item in trace):
+        raise ValueError("'trace' must be a JSON array of event objects")
+    if not isinstance(checks, list) or any(not isinstance(item, dict) for item in checks):
+        raise ValueError("'checks' must be a JSON array of check objects")
+    return trace, checks
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="agentproof")
-    p.add_argument("command", choices=["run", "runs", "run-show"])
+    p.add_argument("command", choices=["run", "runs", "run-show", "trace-eval"])
     p.add_argument("suite", nargs="?")
     p.add_argument("--report", default="agentproof-report.json")
     p.add_argument("--db", default="agentproof.sqlite3")
@@ -53,9 +68,32 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--api-key-env", default="OPENAI_API_KEY")
     p.add_argument("--request-timeout", type=float, default=30.0)
     args = p.parse_args(argv)
-    repo = SQLiteRunRepository(args.db)
 
+    if args.command == "trace-eval":
+        if not args.suite:
+            p.error("trace-eval requires a trace evaluation JSON path")
+        try:
+            trace, checks = load_trace_case(args.suite)
+            report = evaluate_trace(trace, checks)
+            Path(args.report).write_text(
+                json.dumps(report, indent=2, ensure_ascii=False, allow_nan=False) + "\\n",
+                encoding="utf-8",
+            )
+        except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
+            print(f"AgentProof error: {exc}", file=sys.stderr)
+            return 2
+        print(
+            f"Trace evaluation: {'PASS' if report['passed'] else 'FAIL'}\\n"
+            f"Score: {report['score']:.1%}\\n"
+            f"Results: {report['summary']}\\n"
+            f"Report: {args.report}"
+        )
+        return 0 if report["passed"] else 1
+
+    repo = SQLiteRunRepository(args.db)
     if args.command == "runs":
+        if args.limit < 1:
+            p.error("--limit must be at least 1")
         print(json.dumps(repo.list_runs(args.limit), indent=2, default=str))
         return 0
     if args.command == "run-show":
@@ -103,11 +141,11 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     print(
-        f"Run: {run.run_id}\n"
-        f"Score: {run.score:.1%}\n"
-        f"Results: {run.summary}\n"
-        f"Simulated: {run.simulated}\n"
-        f"Report: {args.report}\n"
+        f"Run: {run.run_id}\\n"
+        f"Score: {run.score:.1%}\\n"
+        f"Results: {run.summary}\\n"
+        f"Simulated: {run.simulated}\\n"
+        f"Report: {args.report}\\n"
         f"History: {args.db}"
     )
     return 1 if any(run.summary.get(k, 0) for k in ("failed", "error", "timeout")) else 0
