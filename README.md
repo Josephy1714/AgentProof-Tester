@@ -2,7 +2,7 @@
 
 **An evaluation and regression-testing platform foundation for AI agents.** AgentProof helps developers run reproducible suites, inspect evidence, compare versions, and track quality over time.
 
-> **Current status:** evaluation engine + deterministic simulated adapter + opt-in OpenAI-compatible adapter + SQLite run history + regression analytics + local dashboard API + data-backed dashboard + deterministic trace checks + bounded live tool-call trace capture + trace evaluation history/API + initial hosted-storage schema and opt-in Supabase trace-history adapter. Hosted sign-in, full run-history cloud integration and distributed jobs remain future work.
+> **Current status:** evaluation engine + deterministic simulated adapter + opt-in OpenAI-compatible adapter + SQLite run history + regression analytics + local dashboard API + data-backed dashboard + deterministic trace checks + bounded live tool-call trace capture + trace evaluation history/API + initial hosted-storage schema and opt-in Supabase trace/run-history and analytics adapter. Hosted sign-in and distributed jobs remain future work.
 
 ## Implemented
 
@@ -151,7 +151,7 @@ The existing dashboard includes KPI cards, score trends, test-health visualizati
 
 ## Hosted storage foundation
 
-A versioned Supabase migration and readable schema snapshot with per-user row-level security are documented in [Hosted storage foundation](docs/cloud-storage.md). The migration has **not** been applied to a live database. An opt-in adapter can persist trace-evaluation history and serve `/api/traces` from Supabase; local SQLite remains the default. Full hosted run history, analytics, and multi-user dashboard authentication are not implemented.
+A versioned Supabase migration and readable schema snapshot with per-user row-level security are documented in [Hosted storage foundation](docs/cloud-storage.md). The migration has **not** been applied to a live database. Set `AGENTPROOF_STORAGE=supabase` to opt the CLI's evaluation-run persistence/history commands and the run-history, analytics, and trace-history API routes into Supabase; unset it to keep SQLite as the default. Configure the three `AGENTPROOF_SUPABASE_*` variables described in the docs. This is a single-user access-token setup, not a multi-user hosted deployment. Live Supabase/RLS integration tests and dashboard sign-in are still outstanding.
 
 ## Architecture
 
@@ -170,7 +170,7 @@ Tool-calling agent -> Normalized trace -> Trace checks -> TraceRepository -> SQL
                                                            Trace API
 ```
 
-The storage boundary is intentionally replaceable. The opt-in Supabase adapter currently supports hosted run records and trace records at the adapter level, while CLI/API routing is enabled for trace history only.
+The storage boundary is intentionally replaceable. The opt-in Supabase adapter supports hosted run records and trace records; CLI/API routing uses it when `AGENTPROOF_STORAGE=supabase` is explicitly set.
 
 ## Development checks
 
