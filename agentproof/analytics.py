@@ -4,10 +4,10 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import Any
 
-from agentproof.storage import SQLiteRunRepository
+from agentproof.storage import RunRepository
 
 
-def overview(repo: SQLiteRunRepository) -> dict[str, Any]:
+def overview(repo: RunRepository) -> dict[str, Any]:
     runs = repo.list_runs(200)
     if not runs:
         return {
