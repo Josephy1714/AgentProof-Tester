@@ -11,7 +11,7 @@ from typing import Any
 from agentproof.models import EvaluationSuite
 
 SUPPORTED_SCHEMA_VERSIONS = {"1.0"}
-SUPPORTED_ASSERTIONS = {"equals", "contains", "is_type", "numeric_tolerance", "regex", "has_key"}
+SUPPORTED_ASSERTIONS = {"equals", "contains", "not_contains", "contains_any", "json_valid", "is_type", "numeric_tolerance", "regex", "has_key"}
 TYPE_NAMES = {"string", "integer", "number", "boolean", "array", "object", "null"}
 
 class SuiteValidationError(ValueError):
@@ -40,6 +40,14 @@ def validate_suite(suite: EvaluationSuite) -> None:
                 raise SuiteValidationError(f"Unsupported assertion type {assertion.type!r}")
             if assertion.type == "is_type" and assertion.expected not in TYPE_NAMES:
                 raise SuiteValidationError(f"Unsupported is_type target {assertion.expected!r}")
+            if assertion.type == "contains_any" and (
+                not isinstance(assertion.value, list)
+                or not assertion.value
+                or not all(isinstance(item, str) for item in assertion.value)
+            ):
+                raise SuiteValidationError("contains_any requires a non-empty list of strings")
+            if assertion.type in {"contains", "not_contains"} and not isinstance(assertion.value, str):
+                raise SuiteValidationError(f"{assertion.type} requires a string value")
             if assertion.type == "regex":
                 if not isinstance(assertion.pattern, str):
                     raise SuiteValidationError("Regex assertions require a string pattern")

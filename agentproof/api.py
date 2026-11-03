@@ -19,6 +19,14 @@ from agentproof.storage import SQLiteRunRepository
 from agentproof.trace_storage import SQLiteTraceRepository
 
 
+OPENROUTER_ALLOWED_MODELS = {
+    "openrouter/free",
+    "nvidia/nemotron-3-ultra-550b-a55b:free",
+    "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+    "nvidia/nemotron-3.5-super-vl:free",
+}
+
+
 def _database_path() -> str:
     """Use explicit storage when configured; serverless filesystems are not persistent."""
     configured = os.environ.get("AGENTPROOF_DB")
@@ -192,6 +200,9 @@ class Handler(BaseHTTPRequestHandler):
             if provider not in {"simulated", "openrouter"}:
                 raise ValueError("Provider must be 'simulated' or 'openrouter'.")
             api_key = os.environ.get("OPENROUTER_API_KEY") if provider == "openrouter" else None
+            requested_model = str(raw.get("model", "openrouter/free"))
+            if provider == "openrouter" and requested_model not in OPENROUTER_ALLOWED_MODELS:
+                raise ValueError("Unsupported live model. Choose openrouter/free or one of the approved free NVIDIA models.")
             if provider == "openrouter" and not api_key:
                 self._send({
                     "error": "Live runs are not configured yet. Add OPENROUTER_API_KEY as a server-side Vercel environment secret, then redeploy."
@@ -236,9 +247,9 @@ class Handler(BaseHTTPRequestHandler):
                 metadata=raw.get("metadata", {}),
             )
             if provider == "openrouter":
-                # Free router only: no user-controlled model name, base URL, or paid model calls.
+                # Only fixed free model IDs are allowed; callers cannot provide arbitrary URLs or paid model names.
                 adapter = OpenAICompatibleAdapter(
-                    model="openrouter/free",
+                    model=requested_model,
                     base_url="https://openrouter.ai/api/v1",
                     api_key=api_key,
                     request_timeout=8.0,
@@ -246,9 +257,9 @@ class Handler(BaseHTTPRequestHandler):
                 )
                 run = run_suite(
                     suite, adapter,
-                    {"provider": "openrouter", "model": "openrouter/free", "mode": "live"},
+                    {"provider": "openrouter", "model": requested_model, "mode": "live"},
                 )
-                model = "openrouter/free"
+                model = requested_model
             else:
                 run = run_suite(suite, SimulatedAdapter(), {"mode": "simulated"})
                 model = "synthetic"

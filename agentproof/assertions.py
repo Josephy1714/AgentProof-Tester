@@ -1,6 +1,7 @@
 """Deterministic assertions; these do not claim semantic model judgment."""
 from __future__ import annotations
 
+import json
 import math
 import re
 from typing import Any
@@ -31,6 +32,18 @@ def evaluate_assertion(spec: AssertionSpec, output: Any) -> AssertionResult:
             passed = actual == spec.expected
         elif spec.type == "contains":
             passed = spec.value in actual
+        elif spec.type == "not_contains":
+            passed = spec.value not in actual
+        elif spec.type == "contains_any":
+            if not isinstance(actual, str) or not isinstance(spec.value, list) or not spec.value or not all(isinstance(item, str) for item in spec.value):
+                raise ValueError("contains_any requires text output and a non-empty list of strings")
+            passed = any(item.casefold() in actual.casefold() for item in spec.value)
+        elif spec.type == "json_valid":
+            if isinstance(actual, str):
+                parsed = json.loads(actual)
+            else:
+                parsed = actual
+            passed = isinstance(parsed, (dict, list))
         elif spec.type == "is_type":
             if spec.expected == "string":
                 passed = isinstance(actual, str)
